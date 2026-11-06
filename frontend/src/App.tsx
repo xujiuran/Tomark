@@ -156,23 +156,26 @@ export default function App() {
     <div className="flex h-screen w-screen overflow-hidden bg-[#0a0d14] text-slate-100 font-sans">
       {/* 1. 左侧边栏 (Sidebar) */}
       <aside className="w-64 flex flex-col border-r border-slate-800/80 bg-[#0f1420]/70 backdrop-blur-xl select-none">
-        {/* Logo 区域 */}
-        <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <BookmarkIcon className="w-4 h-4 text-white" />
+        {/* 顶部 Logo 区域 (增加 pl-20 为 macOS 交通灯按键预留安全区) */}
+        <div 
+          className="h-14 border-b border-slate-800/60 flex items-center justify-between pl-20 pr-3.5 select-none"
+          style={{ '--wails-draggable': 'drag' } as any}
+        >
+          <div className="flex items-center gap-2 min-w-0" style={{ '--wails-draggable': 'no-drag' } as any}>
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+              <BookmarkIcon className="w-3.5 h-3.5 text-white" />
             </div>
-            <div>
-              <h1 className="font-bold text-sm tracking-wide text-white">Linkit</h1>
-              <p className="text-[10px] text-slate-400">AI PKM & Bookmarks</p>
+            <div className="min-w-0">
+              <h1 className="font-bold text-xs tracking-wide text-white truncate">Linkit</h1>
             </div>
           </div>
           <button 
             onClick={() => setIsSettingsOpen(true)}
-            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            style={{ '--wails-draggable': 'no-drag' } as any}
+            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition shrink-0"
             title="设置"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -261,8 +264,11 @@ export default function App() {
       {/* 2. 中间书签列表流 (Bookmark List) */}
       <main className="flex-1 flex flex-col min-w-0 border-r border-slate-800/80 bg-[#0d121c]/40">
         {/* 顶部搜索栏与操作按钮 */}
-        <header className="h-14 border-b border-slate-800/60 px-4 flex items-center justify-between gap-3 bg-[#0d121c]/60 backdrop-blur-md">
-          <div className="flex-1 relative max-w-md">
+        <header 
+          className="h-14 border-b border-slate-800/60 px-4 flex items-center justify-between gap-3 bg-[#0d121c]/60 backdrop-blur-md select-none"
+          style={{ '--wails-draggable': 'drag' } as any}
+        >
+          <div className="flex-1 relative max-w-md" style={{ '--wails-draggable': 'no-drag' } as any}>
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -273,7 +279,7 @@ export default function App() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" style={{ '--wails-draggable': 'no-drag' } as any}>
             <button
               onClick={() => setIsAddModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-sm transition"
@@ -389,12 +395,16 @@ export default function App() {
         {selectedBookmark ? (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             {/* 详情标题栏 */}
-            <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
+            <div 
+              className="h-14 px-4 border-b border-slate-800/60 flex items-center justify-between select-none"
+              style={{ '--wails-draggable': 'drag' } as any}
+            >
               <span className="text-xs font-semibold text-slate-300">书签详情 & 洞察</span>
               <a
                 href={selectedBookmark.url}
                 target="_blank"
                 rel="noreferrer"
+                style={{ '--wails-draggable': 'no-drag' } as any}
                 className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
               >
                 <span>在浏览器中打开</span>
@@ -478,9 +488,17 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
-            <Layers className="w-8 h-8 mb-2 opacity-50" />
-            <p className="text-xs">选择左侧任意书签查看详细内容与 AI 深度洞察</p>
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
+            <div 
+              className="h-14 px-4 border-b border-slate-800/60 flex items-center justify-between select-none"
+              style={{ '--wails-draggable': 'drag' } as any}
+            >
+              <span className="text-xs font-semibold text-slate-500">书签详情 & 洞察</span>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+              <Layers className="w-8 h-8 mb-2 opacity-50" />
+              <p className="text-xs">选择左侧任意书签查看详细内容与 AI 深度洞察</p>
+            </div>
           </div>
         )}
       </aside>
