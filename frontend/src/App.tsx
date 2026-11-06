@@ -5,7 +5,7 @@ import {
   CheckCircle, Globe, RefreshCw, X, FolderTree, ChevronDown, ChevronRight,
   Edit3, Check, Loader2, ArrowRight, MoreVertical, LayoutGrid, Palette, Layers,
   FileText, CornerDownRight, FolderPlus, FileUp, Compass, Bookmark as BookmarkIcon,
-  Clock, AlertCircle, CheckSquare, Square, CheckCheck, ListTodo, FolderInput, Tags
+  Clock, AlertCircle, CheckSquare, Square, CheckCheck, ListTodo, FolderInput, Tags, GripVertical
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
@@ -75,6 +75,17 @@ export default function App() {
     subCategory?: string;
     newTagInput?: string;
   }>({ type: null });
+
+  // Resizable sidebar width
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('linkit_sidebar_width');
+    return saved ? Math.min(480, Math.max(180, parseInt(saved, 10))) : 240;
+  });
+  const isResizingSidebar = useRef(false);
+
+  // Drag and drop bookmarks onto category tree
+  const [draggingBookmarkIds, setDraggingBookmarkIds] = useState<string[]>([]);
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
 
   // Navigation & filters
   const [currentTab, setCurrentTab] = useState<'all' | 'favorites' | 'archived'>('all');
@@ -520,6 +531,68 @@ export default function App() {
     }
   };
 
+  // Sidebar drag-to-resize handler
+  const startResizingSidebar = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingSidebar.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingSidebar.current) return;
+      const newWidth = Math.min(480, Math.max(180, moveEvent.clientX));
+      setSidebarWidth(newWidth);
+      localStorage.setItem('linkit_sidebar_width', String(newWidth));
+    };
+
+    const onMouseUp = () => {
+      isResizingSidebar.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Drag and drop bookmarks onto category / subcategory
+  const handleDropOnCategory = async (bookmarkIds: string[], targetCategory: string) => {
+    if (!targetCategory || bookmarkIds.length === 0) return;
+    try {
+      if (bookmarkIds.length === 1) {
+        const b = bookmarks.find(x => x.id === bookmarkIds[0]);
+        await UpdateBookmarkCategory(bookmarkIds[0], targetCategory, b?.sub_category || '');
+      } else {
+        await BatchUpdateCategory(bookmarkIds, targetCategory, '');
+      }
+      if (isBatchMode) {
+        setSelectedBookmarkIds(new Set());
+      }
+      await loadData();
+    } catch (err: any) {
+      alert("拖拽归类失败: " + err);
+    }
+  };
+
+  const handleDropOnSubCategory = async (bookmarkIds: string[], targetCategory: string, subCategoryName: string) => {
+    if (!targetCategory || bookmarkIds.length === 0) return;
+    try {
+      if (bookmarkIds.length === 1) {
+        await UpdateBookmarkCategory(bookmarkIds[0], targetCategory, subCategoryName);
+      } else {
+        await BatchUpdateCategory(bookmarkIds, targetCategory, subCategoryName);
+      }
+      if (isBatchMode) {
+        setSelectedBookmarkIds(new Set());
+      }
+      await loadData();
+    } catch (err: any) {
+      alert("拖拽归类失败: " + err);
+    }
+  };
+
   const handleToggleFav = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     try {
@@ -686,7 +759,10 @@ export default function App() {
       {/* 下方三栏主工作区 */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* 1. 左侧边栏 (Sidebar) */}
-        <aside className="w-60 flex flex-col border-r border-slate-800/80 bg-[#0f1420]/70 backdrop-blur-xl select-none shrink-0">
+        <aside 
+          style={{ width: `${sidebarWidth}px` }}
+          className="flex flex-col border-r border-slate-800/80 bg-[#0f1420]/70 backdrop-blur-xl select-none shrink-0 relative"
+        >
           {/* 导航菜单 */}
           <div className="p-3 space-y-1">
             <button
@@ -763,10 +839,39 @@ export default function App() {
                   <div key={cat.name} className="space-y-0.5">
                     {/* 一级大类行 */}
                     <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverTarget !== `cat:${cat.name}`) {
+                          setDragOverTarget(`cat:${cat.name}`);
+                        }
+                      }}
+                      onDragLeave={(e) => {
+                        if (dragOverTarget === `cat:${cat.name}`) {
+                          setDragOverTarget(null);
+                        }
+                      }}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        setDragOverTarget(null);
+                        try {
+                          const dataStr = e.dataTransfer.getData('application/json');
+                          if (dataStr) {
+                            const data = JSON.parse(dataStr);
+                            if (data?.bookmarkIds?.length > 0) {
+                              await handleDropOnCategory(data.bookmarkIds, cat.name);
+                            }
+                          }
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }}
                       className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition cursor-pointer group ${
-                        isCatActive
-                          ? 'bg-blue-600/30 text-blue-400 border border-blue-500/40 font-semibold shadow-sm'
-                          : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
+                        dragOverTarget === `cat:${cat.name}`
+                          ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 ring-2 ring-cyan-500/50 shadow-lg shadow-cyan-950/60 font-semibold scale-[1.02]'
+                          : isCatActive
+                            ? 'bg-blue-600/30 text-blue-400 border border-blue-500/40 font-semibold shadow-sm'
+                            : 'text-slate-300 hover:bg-slate-800/50 hover:text-white border border-transparent'
                       }`}
                       onClick={() => {
                         if (isCatActive) {
@@ -851,6 +956,36 @@ export default function App() {
                           return (
                             <div
                               key={`${cat.name}-${sub.domain}`}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                e.dataTransfer.dropEffect = 'move';
+                                if (dragOverTarget !== `sub:${cat.name}:${sub.domain}`) {
+                                  setDragOverTarget(`sub:${cat.name}:${sub.domain}`);
+                                }
+                              }}
+                              onDragLeave={(e) => {
+                                e.stopPropagation();
+                                if (dragOverTarget === `sub:${cat.name}:${sub.domain}`) {
+                                  setDragOverTarget(null);
+                                }
+                              }}
+                              onDrop={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDragOverTarget(null);
+                                try {
+                                  const dataStr = e.dataTransfer.getData('application/json');
+                                  if (dataStr) {
+                                    const data = JSON.parse(dataStr);
+                                    if (data?.bookmarkIds?.length > 0) {
+                                      await handleDropOnSubCategory(data.bookmarkIds, cat.name, sub.name || sub.domain);
+                                    }
+                                  }
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (isSubSelected) {
@@ -864,9 +999,11 @@ export default function App() {
                                 }
                               }}
                               className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-[11px] transition cursor-pointer group/sub ${
-                                isSubSelected
-                                  ? 'bg-blue-600/40 text-blue-300 border border-blue-500/50 font-medium'
-                                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                                dragOverTarget === `sub:${cat.name}:${sub.domain}`
+                                  ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200 ring-2 ring-cyan-500/50 font-medium scale-[1.02]'
+                                  : isSubSelected
+                                    ? 'bg-blue-600/40 text-blue-300 border border-blue-500/50 font-medium'
+                                    : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
                               }`}
                             >
                               <div className="flex items-center gap-1.5 truncate">
@@ -992,6 +1129,19 @@ export default function App() {
           </div>
         </aside>
 
+        {/* 拖拽调整左侧栏宽度的分割把手 */}
+        <div
+          onMouseDown={startResizingSidebar}
+          className="w-1.5 -ml-1 cursor-col-resize z-30 bg-transparent hover:bg-blue-500/60 active:bg-blue-500 transition-colors group relative flex items-center justify-center shrink-0 select-none"
+          title="按住鼠标拖拽调整左侧栏宽度（双击复位默认 240px）"
+          onDoubleClick={() => {
+            setSidebarWidth(240);
+            localStorage.setItem('linkit_sidebar_width', '240');
+          }}
+        >
+          <div className="w-0.5 h-7 bg-slate-700/60 group-hover:bg-blue-400 group-active:bg-blue-400 rounded-full transition" />
+        </div>
+
         {/* 2. 中间书签列表流 (Bookmark List) */}
         <main className="flex-1 flex flex-col min-w-0 border-r border-slate-800/80 bg-[#0d121c]/40">
           {/* 次级筛选栏与面包屑路径 */}
@@ -1111,15 +1261,37 @@ export default function App() {
             </div>
           )}
 
+          {/* 拖拽中的全局指引横幅 */}
+          {draggingBookmarkIds.length > 0 && (
+            <div className="px-4 py-2 bg-gradient-to-r from-blue-950/90 via-cyan-950/90 to-blue-950/90 border-b border-cyan-500/50 flex items-center justify-center gap-2 text-xs text-cyan-300 font-medium animate-pulse shrink-0">
+              <FolderInput className="w-4 h-4 text-cyan-400" />
+              <span>拖拽到左侧任意「大类」或「二级站点」即可快速归类 ({draggingBookmarkIds.length} 项)</span>
+            </div>
+          )}
+
           {/* 书签流 */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 relative">
             {bookmarks.map((bm, index) => {
               const isSelected = selectedBookmark?.id === bm.id;
               const isChecked = selectedBookmarkIds.has(bm.id);
+              const isDragging = draggingBookmarkIds.includes(bm.id);
 
               return (
                 <div
                   key={bm.id}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    const dragIds = (isBatchMode && selectedBookmarkIds.has(bm.id) && selectedBookmarkIds.size > 1)
+                      ? Array.from(selectedBookmarkIds)
+                      : [bm.id];
+                    e.dataTransfer.setData('application/json', JSON.stringify({ bookmarkIds: dragIds }));
+                    e.dataTransfer.effectAllowed = 'move';
+                    setDraggingBookmarkIds(dragIds);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingBookmarkIds([]);
+                    setDragOverTarget(null);
+                  }}
                   onClick={(e) => {
                     if (isBatchMode) {
                       handleToggleSelect(bm.id, index, e.shiftKey);
@@ -1128,14 +1300,24 @@ export default function App() {
                     }
                   }}
                   className={`group p-4 rounded-xl border transition cursor-pointer relative ${
-                    isBatchMode && isChecked
-                      ? 'bg-cyan-950/30 border-cyan-500/60 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-500/40'
-                      : isSelected 
-                        ? 'bg-blue-950/20 border-blue-500/60 shadow-lg shadow-blue-950/40 ring-1 ring-blue-500/30' 
-                        : 'bg-[#121824]/60 hover:bg-[#151c2a] border-slate-800/80 hover:border-slate-700'
+                    isDragging
+                      ? 'opacity-40 border-dashed border-cyan-400 scale-[0.98]'
+                      : isBatchMode && isChecked
+                        ? 'bg-cyan-950/30 border-cyan-500/60 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-500/40'
+                        : isSelected 
+                          ? 'bg-blue-950/20 border-blue-500/60 shadow-lg shadow-blue-950/40 ring-1 ring-blue-500/30' 
+                          : 'bg-[#121824]/60 hover:bg-[#151c2a] border-slate-800/80 hover:border-slate-700'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-2.5">
+                    {/* 拖拽抓手图标 */}
+                    <div 
+                      className="mt-0.5 text-slate-600 group-hover:text-slate-400 transition cursor-grab active:cursor-grabbing shrink-0"
+                      title="拖拽到左侧分类或二级站点进行归类"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
+
                     {/* 批量勾选框 */}
                     {isBatchMode && (
                       <button
