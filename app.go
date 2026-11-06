@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -283,10 +286,60 @@ func (a *App) ImportBookmarkFile(filePath string) (*models.ImportResult, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to save bookmarks: %w", err)
 	}
-	res.Message = fmt.Sprintf("成功导入 %d 个书签！", res.TotalImported)
 
-	// Automatically start background AI analysis
-	go a.StartBatchAIAnalysis()
+	// Automatically start background AI analysis for new items
+	if res.TotalImported > 0 {
+		go a.StartBatchAIAnalysis()
+	}
+
+	return res, nil
+}
+
+// HasArcBrowser returns true if Arc browser data is detected.
+func (a *App) HasArcBrowser() bool {
+	return importer.HasArcBrowser()
+}
+
+// ExportArcBookmarks exports Arc browser bookmarks to /Users/tomatoxcj/Downloads/arc_bookmarks_YYYY_MM_DD.html.
+func (a *App) ExportArcBookmarks() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	downloadsDir := filepath.Join(home, "Downloads")
+	nowStr := time.Now().Format("2006_01_02")
+	destPath := filepath.Join(downloadsDir, fmt.Sprintf("arc_bookmarks_%s.html", nowStr))
+
+	count, err := importer.ExportArcToHTML(destPath)
+	if err != nil {
+		return "", fmt.Errorf("导出 Arc 书签失败: %w", err)
+	}
+	return fmt.Sprintf("已成功导出 %d 个 Arc 书签至: %s", count, destPath), nil
+}
+
+// ImportFromArc reads Arc browser sidebar directly and imports bookmarks with full deduplication.
+func (a *App) ImportFromArc() (*models.ImportResult, error) {
+	parsed, err := importer.ParseArcSidebar("")
+	if err != nil {
+		return nil, fmt.Errorf("读取 Arc 浏览器数据失败: %w", err)
+	}
+	if len(parsed) == 0 {
+		return &models.ImportResult{Message: "未在 Arc 中找到有效书签或固定标签"}, nil
+	}
+
+	bookmarks := make([]*models.Bookmark, len(parsed))
+	for i, p := range parsed {
+		bookmarks[i] = p.Bookmark
+	}
+
+	res, err := a.db.BatchCreateBookmarks(bookmarks)
+	if err != nil {
+		return nil, fmt.Errorf("入库失败: %w", err)
+	}
+
+	if res.TotalImported > 0 {
+		go a.StartBatchAIAnalysis()
+	}
 
 	return res, nil
 }

@@ -3,13 +3,14 @@ import {
   Bookmark as BookmarkIcon, Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
   CheckCircle, Globe, RefreshCw, X, BookOpen, Layers, FileUp,
-  Clock, AlertCircle, FolderTree, Code2, ChevronDown, ChevronRight
+  Clock, AlertCircle, FolderTree, Code2, ChevronDown, ChevronRight, Compass
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
   ToggleArchive, AnalyzeBookmark, GetTags, GetCategoryHierarchy, GetStats, 
   SaveAIConfig, GetAIConfig, SelectAndImportBookmarks, 
-  StartBatchAIAnalysis, GetAnalysisProgress, ResetAndReanalyzeAll
+  StartBatchAIAnalysis, GetAnalysisProgress, ResetAndReanalyzeAll,
+  HasArcBrowser, ImportFromArc, ExportArcBookmarks
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
 
@@ -51,6 +52,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [hasArc, setHasArc] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<models.AnalysisProgress | null>(null);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState<'all' | 'completed' | 'processing' | 'pending' | 'failed'>('all');
@@ -86,7 +88,7 @@ export default function App() {
     setIsImporting(true);
     try {
       const res = await SelectAndImportBookmarks();
-      if (res && res.total_imported > 0) {
+      if (res) {
         alert(`🎉 ${res.message}\n已加入后台并发队列，本地 Magpie (DeepSeek) 正在持续深度分析中...`);
         await loadData();
         const prog = await GetAnalysisProgress();
@@ -94,6 +96,23 @@ export default function App() {
       }
     } catch (err: any) {
       alert("导入失败: " + err);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleImportArc = async () => {
+    setIsImporting(true);
+    try {
+      const res = await ImportFromArc();
+      if (res) {
+        alert(`🎉 ${res.message}\n已加入后台并发队列，本地 Magpie (DeepSeek) 正在持续深度分析中...`);
+        await loadData();
+        const prog = await GetAnalysisProgress();
+        setAnalysisProgress(prog);
+      }
+    } catch (err: any) {
+      alert("导入 Arc 书签失败: " + err);
     } finally {
       setIsImporting(false);
     }
@@ -129,8 +148,10 @@ export default function App() {
     loadData();
   }, [currentTab, selectedCategory, selectedDomain, selectedTag, searchQuery]);
 
-  // Load AI configuration on mount
+  // Load AI configuration & check Arc browser on mount
   useEffect(() => {
+    HasArcBrowser().then(setHasArc).catch(console.error);
+
     GetAIConfig().then(cfg => {
       if (cfg) {
         setAiBaseURL(cfg.base_url || 'http://127.0.0.1:3425/v1');
@@ -278,8 +299,20 @@ export default function App() {
             title="导入从 Chrome/Edge 等浏览器导出的 HTML 书签文件"
           >
             <FileUp className="w-3.5 h-3.5 text-blue-400" />
-            <span>{isImporting ? '正在解析...' : '导入书签'}</span>
+            <span>{isImporting ? '正在解析...' : '导入 HTML'}</span>
           </button>
+
+          {hasArc && (
+            <button
+              onClick={handleImportArc}
+              disabled={isImporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-950/40 hover:bg-orange-900/50 text-orange-200 border border-orange-700/50 text-xs font-medium shadow-sm transition shrink-0 disabled:opacity-50"
+              title="一键直接读取本地 Arc 浏览器书签并自动去重导入"
+            >
+              <Compass className="w-3.5 h-3.5 text-orange-400" />
+              <span>{isImporting ? '正在去重...' : '导入 Arc'}</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsAddModalOpen(true)}

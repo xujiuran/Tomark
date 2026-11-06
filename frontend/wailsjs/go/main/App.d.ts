@@ -8,6 +8,8 @@ export function AnalyzeBookmark(arg1:string):Promise<models.AISummaryResult>;
 
 export function DeleteBookmark(arg1:string):Promise<void>;
 
+export function ExportArcBookmarks():Promise<string>;
+
 export function GetAIConfig():Promise<models.AIConfig>;
 
 export function GetAnalysisProgress():Promise<models.AnalysisProgress>;
@@ -24,7 +26,11 @@ export function GetStats():Promise<models.Stats>;
 
 export function GetTags():Promise<Array<models.Tag>>;
 
+export function HasArcBrowser():Promise<boolean>;
+
 export function ImportBookmarkFile(arg1:string):Promise<models.ImportResult>;
+
+export function ImportFromArc():Promise<models.ImportResult>;
 
 export function ResetAndReanalyzeAll():Promise<models.AnalysisProgress>;
 

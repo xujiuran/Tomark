@@ -14,6 +14,10 @@ export function DeleteBookmark(arg1) {
   return window['go']['main']['App']['DeleteBookmark'](arg1);
 }
 
+export function ExportArcBookmarks() {
+  return window['go']['main']['App']['ExportArcBookmarks']();
+}
+
 export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
 }
@@ -46,8 +50,16 @@ export function GetTags() {
   return window['go']['main']['App']['GetTags']();
 }
 
+export function HasArcBrowser() {
+  return window['go']['main']['App']['HasArcBrowser']();
+}
+
 export function ImportBookmarkFile(arg1) {
   return window['go']['main']['App']['ImportBookmarkFile'](arg1);
+}
+
+export function ImportFromArc() {
+  return window['go']['main']['App']['ImportFromArc']();
 }
 
 export function ResetAndReanalyzeAll() {

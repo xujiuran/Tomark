@@ -257,8 +257,41 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 	defer btStmt.Close()
 
 	imported := 0
+	duplicates := 0
 	now := time.Now()
+	seenBatch := make(map[string]bool)
+
 	for _, b := range items {
+		cleanURL := strings.TrimSpace(b.URL)
+		if cleanURL == "" {
+			continue
+		}
+		// In-batch deduplication
+		normURL := strings.TrimRight(strings.ToLower(cleanURL), "/")
+		if seenBatch[normURL] {
+			duplicates++
+			continue
+		}
+		seenBatch[normURL] = true
+
+		// Check if URL already exists in database
+		var existingID string
+		err := tx.QueryRow("SELECT id FROM bookmarks WHERE url = ? OR rtrim(lower(url), '/') = ?", cleanURL, normURL).Scan(&existingID)
+		if err == nil && existingID != "" {
+			// Already in DB -> Count as duplicate and skip inserting
+			duplicates++
+			// Merge tags into existing bookmark
+			for _, tagName := range b.Tags {
+				tagName = strings.TrimSpace(strings.ToLower(tagName))
+				if tagName != "" {
+					tagID := uuid.NewString()
+					_, _ = tagStmt.Exec(tagID, tagName)
+					_, _ = btStmt.Exec(existingID, tagName)
+				}
+			}
+			continue
+		}
+
 		if b.ID == "" {
 			b.ID = uuid.NewString()
 		}
@@ -283,7 +316,7 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 		}
 
 		keyPointsJSON, _ := json.Marshal(b.AIKeyPoints)
-		_, err := stmt.Exec(
+		_, err = stmt.Exec(
 			b.ID, b.URL, b.Title, b.Description, b.Category, b.SubCategory, b.Domain, b.FaviconURL, b.CoverImage,
 			b.ContentRaw, b.AISummary, string(keyPointsJSON), b.StatusCode,
 			isArch, isFav, now, now,
@@ -311,7 +344,8 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 
 	return &models.ImportResult{
 		TotalImported: imported,
-		Duplicates:    len(items) - imported,
+		Duplicates:    duplicates,
+		Message:       fmt.Sprintf("导入完成：成功新增 %d 个新书签，已自动去重并跳过 %d 个重复书签！", imported, duplicates),
 	}, nil
 }
 
