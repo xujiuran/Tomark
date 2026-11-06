@@ -153,355 +153,362 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0a0d14] text-slate-100 font-sans">
-      {/* 1. 左侧边栏 (Sidebar) */}
-      <aside className="w-64 flex flex-col border-r border-slate-800/80 bg-[#0f1420]/70 backdrop-blur-xl select-none">
-        {/* 顶部 Logo 区域 (增加 pl-20 为 macOS 交通灯按键预留安全区) */}
-        <div 
-          className="h-14 border-b border-slate-800/60 flex items-center justify-between pl-20 pr-3.5 select-none"
-          style={{ '--wails-draggable': 'drag' } as any}
-        >
-          <div className="flex items-center gap-2 min-w-0" style={{ '--wails-draggable': 'no-drag' } as any}>
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-              <BookmarkIcon className="w-3.5 h-3.5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="font-bold text-xs tracking-wide text-white truncate">Linkit</h1>
-            </div>
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0a0d14] text-slate-100 font-sans">
+      {/* 顶部通栏导航 (Full-Width Native Titlebar，Mac 交通灯独立保留 92px 安全距离) */}
+      <header 
+        className="h-12 border-b border-slate-800/80 bg-[#0d121c]/90 backdrop-blur-md flex items-center justify-between px-4 select-none shrink-0"
+        style={{ '--wails-draggable': 'drag' } as any}
+      >
+        {/* 左侧：为 macOS 交通灯留出充足空间 (pl-[92px])，展示 Logo 与标题 */}
+        <div className="flex items-center gap-3 pl-[88px] min-w-0" style={{ '--wails-draggable': 'no-drag' } as any}>
+          <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+            <BookmarkIcon className="w-3.5 h-3.5 text-white" />
           </div>
-          <button 
-            onClick={() => setIsSettingsOpen(true)}
-            style={{ '--wails-draggable': 'no-drag' } as any}
-            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition shrink-0"
-            title="设置"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* 导航菜单 */}
-        <div className="p-3 space-y-1">
-          <button
-            onClick={() => { setCurrentTab('all'); setSelectedTag(''); }}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-              currentTab === 'all' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Globe className="w-4 h-4" />
-              <span>全部书签</span>
-            </div>
-            <span className="text-[10px] opacity-75">{stats?.total_bookmarks ?? 0}</span>
-          </button>
-
-          <button
-            onClick={() => { setCurrentTab('favorites'); setSelectedTag(''); }}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-              currentTab === 'favorites' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Star className="w-4 h-4 text-amber-400" />
-              <span>星标收藏</span>
-            </div>
-            <span className="text-[10px] opacity-75">{stats?.favorites ?? 0}</span>
-          </button>
-
-          <button
-            onClick={() => { setCurrentTab('archived'); setSelectedTag(''); }}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-              currentTab === 'archived' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Archive className="w-4 h-4" />
-              <span>归档箱</span>
-            </div>
-            <span className="text-[10px] opacity-75">{stats?.archived ?? 0}</span>
-          </button>
-        </div>
-
-        {/* 标签列表 */}
-        <div className="flex-1 overflow-y-auto px-3 py-2">
-          <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between">
-            <span>智能标签</span>
-            <span className="text-[10px] text-slate-500">{tags.length}</span>
-          </div>
-          <div className="mt-1 space-y-0.5">
-            {tags.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition ${
-                  selectedTag === t.name ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <TagIcon className="w-3 h-3 text-blue-400 shrink-0" />
-                  <span className="truncate">#{t.name}</span>
-                </div>
-                <span className="text-[10px] text-slate-500 font-mono">{t.count}</span>
-              </button>
-            ))}
-            {tags.length === 0 && (
-              <p className="text-[11px] text-slate-500 px-2 py-3 italic">暂无标签，添加书签后由 AI 自动生成</p>
-            )}
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-sm tracking-wide text-white">Linkit</span>
+            <span className="text-slate-600 text-xs hidden sm:inline">/</span>
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">AI Bookmark & PKM</span>
           </div>
         </div>
 
-        {/* 状态统计卡片 */}
-        <div className="p-3 border-t border-slate-800/60 text-xs">
-          <div className="p-2.5 rounded-lg bg-slate-800/40 border border-slate-800 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">本地存储 (SQLite)</span>
-            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              离线就绪
-            </span>
-          </div>
-        </div>
-      </aside>
-
-      {/* 2. 中间书签列表流 (Bookmark List) */}
-      <main className="flex-1 flex flex-col min-w-0 border-r border-slate-800/80 bg-[#0d121c]/40">
-        {/* 顶部搜索栏与操作按钮 */}
-        <header 
-          className="h-14 border-b border-slate-800/60 px-4 flex items-center justify-between gap-3 bg-[#0d121c]/60 backdrop-blur-md select-none"
-          style={{ '--wails-draggable': 'drag' } as any}
-        >
-          <div className="flex-1 relative max-w-md" style={{ '--wails-draggable': 'no-drag' } as any}>
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        {/* 右侧：全局搜索框 + 添加按钮 + 设置 */}
+        <div className="flex items-center gap-2.5" style={{ '--wails-draggable': 'no-drag' } as any}>
+          <div className="relative w-64 md:w-72">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="搜索标题、描述、AI 摘要... (Cmd+K)"
+              placeholder="搜索书签或语义探索 (Cmd+K)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/60 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+              className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition"
             />
           </div>
 
-          <div className="flex items-center gap-2" style={{ '--wails-draggable': 'no-drag' } as any}>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-sm transition shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>添加书签</span>
+          </button>
+
+          <button 
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition shrink-0"
+            title="设置"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* 下方三栏主工作区 */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* 1. 左侧边栏 (Sidebar) */}
+        <aside className="w-60 flex flex-col border-r border-slate-800/80 bg-[#0f1420]/70 backdrop-blur-xl select-none shrink-0">
+          {/* 导航菜单 */}
+          <div className="p-3 space-y-1">
             <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-sm transition"
+              onClick={() => { setCurrentTab('all'); setSelectedTag(''); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                currentTab === 'all' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              }`}
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>添加书签</span>
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4" />
+                <span>全部书签</span>
+              </div>
+              <span className="text-[10px] opacity-75">{stats?.total_bookmarks ?? 0}</span>
+            </button>
+
+            <button
+              onClick={() => { setCurrentTab('favorites'); setSelectedTag(''); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                currentTab === 'favorites' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Star className="w-4 h-4 text-amber-400" />
+                <span>星标收藏</span>
+              </div>
+              <span className="text-[10px] opacity-75">{stats?.favorites ?? 0}</span>
+            </button>
+
+            <button
+              onClick={() => { setCurrentTab('archived'); setSelectedTag(''); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                currentTab === 'archived' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Archive className="w-4 h-4" />
+                <span>归档箱</span>
+              </div>
+              <span className="text-[10px] opacity-75">{stats?.archived ?? 0}</span>
             </button>
           </div>
-        </header>
 
-        {/* 书签流 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {bookmarks.map((bm) => {
-            const isSelected = selectedBookmark?.id === bm.id;
-            return (
-              <div
-                key={bm.id}
-                onClick={() => setSelectedBookmark(bm)}
-                className={`group p-4 rounded-xl border transition cursor-pointer relative ${
-                  isSelected 
-                    ? 'bg-blue-950/20 border-blue-500/60 shadow-lg shadow-blue-950/40 ring-1 ring-blue-500/30' 
-                    : 'bg-[#121824]/60 hover:bg-[#151c2a] border-slate-800/80 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  {/* Favicon & Title */}
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <img 
-                      src={bm.favicon_url || 'https://www.google.com/s2/favicons?domain=' + bm.url} 
-                      alt=""
-                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                      className="w-5 h-5 rounded mt-0.5 object-contain bg-slate-800 shrink-0" 
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-sm text-slate-100 group-hover:text-blue-400 transition truncate">
-                        {bm.title || bm.url}
-                      </h3>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5 font-mono">
-                        {bm.url}
+          {/* 标签列表 */}
+          <div className="flex-1 overflow-y-auto px-3 py-2">
+            <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between">
+              <span>智能标签</span>
+              <span className="text-[10px] text-slate-500">{tags.length}</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              {tags.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition ${
+                    selectedTag === t.name ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <TagIcon className="w-3 h-3 text-blue-400 shrink-0" />
+                    <span className="truncate">#{t.name}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">{t.count}</span>
+                </button>
+              ))}
+              {tags.length === 0 && (
+                <p className="text-[11px] text-slate-500 px-2 py-3 italic">暂无标签，添加书签后由 AI 自动生成</p>
+              )}
+            </div>
+          </div>
+
+          {/* 状态统计卡片 */}
+          <div className="p-3 border-t border-slate-800/60 text-xs">
+            <div className="p-2.5 rounded-lg bg-slate-800/40 border border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">本地存储 (SQLite)</span>
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                离线就绪
+              </span>
+            </div>
+          </div>
+        </aside>
+
+        {/* 2. 中间书签列表流 (Bookmark List) */}
+        <main className="flex-1 flex flex-col min-w-0 border-r border-slate-800/80 bg-[#0d121c]/40">
+          {/* 次级筛选栏与状态栏 */}
+          <div className="h-9 border-b border-slate-800/60 px-4 flex items-center justify-between text-xs bg-[#0d121c]/40 shrink-0">
+            <div className="flex items-center gap-2 text-slate-400 font-medium">
+              <span>
+                {currentTab === 'all' && '全部书签'}
+                {currentTab === 'favorites' && '星标收藏'}
+                {currentTab === 'archived' && '归档箱'}
+              </span>
+              {selectedTag && <span className="text-blue-400 font-mono">#{selectedTag}</span>}
+              <span className="text-slate-600 font-mono">({bookmarks.length})</span>
+            </div>
+          </div>
+
+          {/* 书签流 */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {bookmarks.map((bm) => {
+              const isSelected = selectedBookmark?.id === bm.id;
+              return (
+                <div
+                  key={bm.id}
+                  onClick={() => setSelectedBookmark(bm)}
+                  className={`group p-4 rounded-xl border transition cursor-pointer relative ${
+                    isSelected 
+                      ? 'bg-blue-950/20 border-blue-500/60 shadow-lg shadow-blue-950/40 ring-1 ring-blue-500/30' 
+                      : 'bg-[#121824]/60 hover:bg-[#151c2a] border-slate-800/80 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    {/* Favicon & Title */}
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <img 
+                        src={bm.favicon_url || 'https://www.google.com/s2/favicons?domain=' + bm.url} 
+                        alt=""
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        className="w-5 h-5 rounded mt-0.5 object-contain bg-slate-800 shrink-0" 
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm text-slate-100 group-hover:text-blue-400 transition truncate">
+                          {bm.title || bm.url}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5 font-mono">
+                          {bm.url}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions buttons */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                      <button
+                        onClick={(e) => handleToggleFav(bm.id, e)}
+                        className={`p-1.5 rounded hover:bg-slate-700/60 transition ${bm.is_favorite ? 'text-amber-400' : 'text-slate-400'}`}
+                        title="收藏"
+                      >
+                        <Star className="w-4 h-4 fill-current" />
+                      </button>
+                      <button
+                        onClick={(e) => handleToggleArchive(bm.id, e)}
+                        className={`p-1.5 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition`}
+                        title="归档"
+                      >
+                        <Archive className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(bm.id, e)}
+                        className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition"
+                        title="删除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* AI Summary snippet */}
+                  {bm.ai_summary ? (
+                    <div className="mt-2.5 p-2 rounded-lg bg-blue-900/15 border border-blue-800/30 text-xs text-blue-200/90 leading-relaxed">
+                      <div className="flex items-center gap-1.5 text-[10px] text-blue-400 font-semibold mb-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>AI 智能摘要</span>
+                      </div>
+                      {bm.ai_summary}
+                    </div>
+                  ) : (
+                    bm.description && (
+                      <p className="mt-2 text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {bm.description}
                       </p>
-                    </div>
-                  </div>
+                    )
+                  )}
 
-                  {/* Actions buttons */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
-                    <button
-                      onClick={(e) => handleToggleFav(bm.id, e)}
-                      className={`p-1.5 rounded hover:bg-slate-700/60 transition ${bm.is_favorite ? 'text-amber-400' : 'text-slate-400'}`}
-                      title="收藏"
-                    >
-                      <Star className="w-4 h-4 fill-current" />
-                    </button>
-                    <button
-                      onClick={(e) => handleToggleArchive(bm.id, e)}
-                      className={`p-1.5 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition`}
-                      title="归档"
-                    >
-                      <Archive className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDelete(bm.id, e)}
-                      className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {/* Tags row */}
+                  {bm.tags && bm.tags.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {bm.tags.map((t, idx) => (
+                        <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/50">
+                          #{t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
+              );
+            })}
 
-                {/* AI Summary snippet */}
-                {bm.ai_summary ? (
-                  <div className="mt-2.5 p-2 rounded-lg bg-blue-900/15 border border-blue-800/30 text-xs text-blue-200/90 leading-relaxed">
-                    <div className="flex items-center gap-1.5 text-[10px] text-blue-400 font-semibold mb-1">
-                      <Sparkles className="w-3 h-3" />
-                      <span>AI 智能摘要</span>
-                    </div>
-                    {bm.ai_summary}
-                  </div>
-                ) : (
-                  bm.description && (
-                    <p className="mt-2 text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                      {bm.description}
-                    </p>
-                  )
+            {bookmarks.length === 0 && (
+              <div className="text-center py-16">
+                <BookOpen className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-400 font-medium">书签库空空如也</p>
+                <p className="text-xs text-slate-500 mt-1">点击右上角「+ 添加书签」输入任意网页链接体验 AI 自动解析</p>
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* 3. 右侧详情与阅读器面板 (Detail & Reader Panel) */}
+        <aside className="w-96 flex flex-col border-l border-slate-800/80 bg-[#0f1420]/50 backdrop-blur-xl shrink-0">
+          {selectedBookmark ? (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              {/* 详情标题栏 */}
+              <div className="h-9 px-4 border-b border-slate-800/60 flex items-center justify-between select-none shrink-0">
+                <span className="text-xs font-semibold text-slate-300">书签详情 & 洞察</span>
+                <a
+                  href={selectedBookmark.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
+                >
+                  <span>在浏览器中打开</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+
+              {/* 详情内容 */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Cover Image */}
+                {selectedBookmark.cover_image && (
+                  <img
+                    src={selectedBookmark.cover_image}
+                    alt=""
+                    className="w-full h-36 object-cover rounded-xl border border-slate-800"
+                  />
                 )}
 
-                {/* Tags row */}
-                {bm.tags && bm.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {bm.tags.map((t, idx) => (
-                      <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/50">
-                        #{t}
-                      </span>
-                    ))}
+                {/* Title & URL */}
+                <div>
+                  <h2 className="text-base font-bold text-white leading-snug">
+                    {selectedBookmark.title}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1 break-all font-mono">
+                    {selectedBookmark.url}
+                  </p>
+                </div>
+
+                {/* AI 洞察分析区块 */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-b from-blue-950/30 to-indigo-950/20 border border-blue-800/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                      <span>AI 知识洞察 (DeepSeek / OpenAI)</span>
+                    </div>
+                    <button
+                      onClick={() => handleAnalyze(selectedBookmark.id)}
+                      disabled={isAnalyzing}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium transition disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isAnalyzing ? 'animate-spin' : ''}`} />
+                      <span>{isAnalyzing ? '分析中...' : '重新分析'}</span>
+                    </button>
+                  </div>
+
+                  {selectedBookmark.ai_summary ? (
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">核心摘要</span>
+                        <p className="text-slate-200 mt-0.5 leading-relaxed">{selectedBookmark.ai_summary}</p>
+                      </div>
+
+                      {selectedBookmark.ai_key_points && selectedBookmark.ai_key_points.length > 0 && (
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">关键 Takeaways</span>
+                          <ul className="mt-1 space-y-1 list-disc list-inside text-slate-300">
+                            {selectedBookmark.ai_key_points.map((pt, i) => (
+                              <li key={i} className="text-xs leading-relaxed">{pt}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-xs text-slate-400">
+                      <p>尚未进行 AI 总结</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">点击上方按钮自动生成精炼摘要与知识要点</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 正文预览模式 */}
+                {selectedBookmark.content_raw && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-slate-400">文章提取纯文本 (Readability)</span>
+                    <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-xs text-slate-300 max-h-60 overflow-y-auto whitespace-pre-wrap leading-relaxed select-text font-serif">
+                      {selectedBookmark.content_raw}
+                    </div>
                   </div>
                 )}
               </div>
-            );
-          })}
-
-          {bookmarks.length === 0 && (
-            <div className="text-center py-16">
-              <BookOpen className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              <p className="text-sm text-slate-400 font-medium">书签库空空如也</p>
-              <p className="text-xs text-slate-500 mt-1">点击右上角「+ 添加书签」输入任意网页链接体验 AI 自动解析</p>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <div className="h-9 px-4 border-b border-slate-800/60 flex items-center justify-between text-xs select-none shrink-0">
+                <span className="font-semibold text-slate-500">书签详情 & 洞察</span>
+              </div>
+              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+                <Layers className="w-8 h-8 mb-2 opacity-50" />
+                <p className="text-xs">选择左侧任意书签查看详细内容与 AI 深度洞察</p>
+              </div>
             </div>
           )}
-        </div>
-      </main>
-
-      {/* 3. 右侧详情与阅读器面板 (Detail & Reader Panel) */}
-      <aside className="w-96 flex flex-col border-l border-slate-800/80 bg-[#0f1420]/50 backdrop-blur-xl">
-        {selectedBookmark ? (
-          <div className="flex-1 flex flex-col h-full overflow-hidden">
-            {/* 详情标题栏 */}
-            <div 
-              className="h-14 px-4 border-b border-slate-800/60 flex items-center justify-between select-none"
-              style={{ '--wails-draggable': 'drag' } as any}
-            >
-              <span className="text-xs font-semibold text-slate-300">书签详情 & 洞察</span>
-              <a
-                href={selectedBookmark.url}
-                target="_blank"
-                rel="noreferrer"
-                style={{ '--wails-draggable': 'no-drag' } as any}
-                className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
-              >
-                <span>在浏览器中打开</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-
-            {/* 详情内容 */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Cover Image */}
-              {selectedBookmark.cover_image && (
-                <img
-                  src={selectedBookmark.cover_image}
-                  alt=""
-                  className="w-full h-36 object-cover rounded-xl border border-slate-800"
-                />
-              )}
-
-              {/* Title & URL */}
-              <div>
-                <h2 className="text-base font-bold text-white leading-snug">
-                  {selectedBookmark.title}
-                </h2>
-                <p className="text-xs text-slate-400 mt-1 break-all font-mono">
-                  {selectedBookmark.url}
-                </p>
-              </div>
-
-              {/* AI 洞察分析区块 */}
-              <div className="p-3.5 rounded-xl bg-gradient-to-b from-blue-950/30 to-indigo-950/20 border border-blue-800/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    <span>AI 知识洞察 (DeepSeek / OpenAI)</span>
-                  </div>
-                  <button
-                    onClick={() => handleAnalyze(selectedBookmark.id)}
-                    disabled={isAnalyzing}
-                    className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium transition disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isAnalyzing ? 'animate-spin' : ''}`} />
-                    <span>{isAnalyzing ? '分析中...' : '重新分析'}</span>
-                  </button>
-                </div>
-
-                {selectedBookmark.ai_summary ? (
-                  <div className="space-y-2 text-xs">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">核心摘要</span>
-                      <p className="text-slate-200 mt-0.5 leading-relaxed">{selectedBookmark.ai_summary}</p>
-                    </div>
-
-                    {selectedBookmark.ai_key_points && selectedBookmark.ai_key_points.length > 0 && (
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">关键 Takeaways</span>
-                        <ul className="mt-1 space-y-1 list-disc list-inside text-slate-300">
-                          {selectedBookmark.ai_key_points.map((pt, i) => (
-                            <li key={i} className="text-xs leading-relaxed">{pt}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-xs text-slate-400">
-                    <p>尚未进行 AI 总结</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">点击上方按钮自动生成精炼摘要与知识要点</p>
-                  </div>
-                )}
-              </div>
-
-              {/* 正文预览模式 */}
-              {selectedBookmark.content_raw && (
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-slate-400">文章提取纯文本 (Readability)</span>
-                  <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-xs text-slate-300 max-h-60 overflow-y-auto whitespace-pre-wrap leading-relaxed select-text font-serif">
-                    {selectedBookmark.content_raw}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col h-full overflow-hidden">
-            <div 
-              className="h-14 px-4 border-b border-slate-800/60 flex items-center justify-between select-none"
-              style={{ '--wails-draggable': 'drag' } as any}
-            >
-              <span className="text-xs font-semibold text-slate-500">书签详情 & 洞察</span>
-            </div>
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
-              <Layers className="w-8 h-8 mb-2 opacity-50" />
-              <p className="text-xs">选择左侧任意书签查看详细内容与 AI 深度洞察</p>
-            </div>
-          </div>
-        )}
-      </aside>
+        </aside>
+      </div>
 
       {/* 4. 添加书签弹窗 (Add Modal) */}
       {isAddModalOpen && (
