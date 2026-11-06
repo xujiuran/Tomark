@@ -14,13 +14,17 @@ export function GetAnalysisProgress():Promise<models.AnalysisProgress>;
 
 export function GetBookmark(arg1:string):Promise<models.Bookmark>;
 
-export function GetBookmarks(arg1:string,arg2:string,arg3:boolean,arg4:boolean):Promise<Array<models.Bookmark>>;
+export function GetBookmarks(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:boolean):Promise<Array<models.Bookmark>>;
+
+export function GetCategories():Promise<Array<models.CategoryCount>>;
 
 export function GetStats():Promise<models.Stats>;
 
 export function GetTags():Promise<Array<models.Tag>>;
 
 export function ImportBookmarkFile(arg1:string):Promise<models.ImportResult>;
+
+export function ResetAndReanalyzeAll():Promise<models.AnalysisProgress>;
 
 export function SaveAIConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
 

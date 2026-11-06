@@ -77,7 +77,7 @@ func (a *App) AddBookmark(targetURL string) (*models.Bookmark, error) {
 	}
 
 	// Try auto AI analysis in the background
-	go func(bmID, title, content string) {
+	go func(bmID, title, targetURL, content string) {
 		baseURL := a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1")
 		model := a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash")
 		apiKey, _ := keychain.GetAPIKey()
@@ -86,22 +86,22 @@ func (a *App) AddBookmark(targetURL string) (*models.Bookmark, error) {
 			apiKey = "magpie"
 		}
 		if (apiKey != "" || isLocal) && len(content) > 20 {
-			res, err := ai.AnalyzeContent(title, content, apiKey, baseURL, model)
+			res, err := ai.AnalyzeContent(title, targetURL, content, apiKey, baseURL, model)
 			if err == nil && res != nil {
-				_ = a.db.UpdateBookmarkAI(bmID, res.Summary, res.KeyTakeaways, res.SuggestedTags)
+				_ = a.db.UpdateBookmarkAI(bmID, res.Summary, res.Category, res.KeyTakeaways, res.SuggestedTags)
 			}
 		}
-	}(saved.ID, saved.Title, pageMeta.ContentText)
+	}(saved.ID, saved.Title, targetURL, pageMeta.ContentText)
 
 	return saved, nil
 }
 
 // GetBookmarks returns bookmarks matching search and filter parameters.
-func (a *App) GetBookmarks(search, tagName string, favoriteOnly, archivedOnly bool) ([]*models.Bookmark, error) {
+func (a *App) GetBookmarks(search, tagName, category string, favoriteOnly, archivedOnly bool) ([]*models.Bookmark, error) {
 	if a.db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	return a.db.GetBookmarks(search, tagName, favoriteOnly, archivedOnly)
+	return a.db.GetBookmarks(search, tagName, category, favoriteOnly, archivedOnly)
 }
 
 // GetBookmark retrieves a single bookmark by ID.
@@ -163,17 +163,25 @@ func (a *App) AnalyzeBookmark(id string) (*models.AISummaryResult, error) {
 		content = bm.Description
 	}
 
-	res, err := ai.AnalyzeContent(bm.Title, content, apiKey, baseURL, model)
+	res, err := ai.AnalyzeContent(bm.Title, bm.URL, content, apiKey, baseURL, model)
 	if err != nil {
 		return nil, err
 	}
 
-	err = a.db.UpdateBookmarkAI(id, res.Summary, res.KeyTakeaways, res.SuggestedTags)
+	err = a.db.UpdateBookmarkAI(id, res.Summary, res.Category, res.KeyTakeaways, res.SuggestedTags)
 	if err != nil {
 		return nil, err
 	}
 
 	return res, nil
+}
+
+// GetCategories returns category counts from the database.
+func (a *App) GetCategories() ([]*models.CategoryCount, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	return a.db.GetCategories()
 }
 
 // GetTags returns all tags and their frequency.
@@ -365,11 +373,12 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 					content = target.Title
 				}
 
-				res, err := ai.AnalyzeContent(target.Title, content, apiKey, baseURL, model)
+				res, err := ai.AnalyzeContent(target.Title, target.URL, content, apiKey, baseURL, model)
 				a.analysisMu.Lock()
 				if err == nil && res != nil {
-					_ = a.db.UpdateBookmarkAI(target.ID, res.Summary, res.KeyTakeaways, res.SuggestedTags)
+					_ = a.db.UpdateBookmarkAI(target.ID, res.Summary, res.Category, res.KeyTakeaways, res.SuggestedTags)
 					item.Status = "completed"
+					item.Category = res.Category
 					item.Summary = res.Summary
 					item.Tags = res.SuggestedTags
 					a.analysisSuccess++
@@ -413,4 +422,22 @@ func (a *App) GetAnalysisProgress() (*models.AnalysisProgress, error) {
 		IsRunning: a.isAnalyzing,
 		Tasks:     a.analysisTasks,
 	}, nil
+}
+
+// ResetAndReanalyzeAll clears previous summaries and categories and restarts batch analysis.
+func (a *App) ResetAndReanalyzeAll() (*models.AnalysisProgress, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	a.analysisMu.Lock()
+	if a.isAnalyzing {
+		a.analysisMu.Unlock()
+		return nil, fmt.Errorf("analysis is currently in progress")
+	}
+	a.analysisMu.Unlock()
+
+	if err := a.db.ResetAllAnalysis(); err != nil {
+		return nil, err
+	}
+	return a.StartBatchAIAnalysis()
 }

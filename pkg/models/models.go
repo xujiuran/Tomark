@@ -8,6 +8,7 @@ type Bookmark struct {
 	URL         string    `json:"url"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
+	Category    string    `json:"category"`
 	FaviconURL  string    `json:"favicon_url"`
 	CoverImage  string    `json:"cover_image"`
 	ContentRaw  string    `json:"content_raw"`
@@ -19,6 +20,12 @@ type Bookmark struct {
 	IsFavorite  bool      `json:"is_favorite"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// CategoryCount represents a category with bookmark count.
+type CategoryCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }
 
 // Tag represents a category label.
@@ -76,6 +83,7 @@ type AnalysisTaskItem struct {
 	Title      string    `json:"title"`
 	URL        string    `json:"url"`
 	Status     string    `json:"status"` // "pending", "processing", "completed", "failed"
+	Category   string    `json:"category,omitempty"`
 	Summary    string    `json:"summary,omitempty"`
 	Tags       []string  `json:"tags,omitempty"`
 	Error      string    `json:"error,omitempty"`

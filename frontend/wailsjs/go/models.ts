@@ -39,6 +39,7 @@ export namespace models {
 	    title: string;
 	    url: string;
 	    status: string;
+	    category?: string;
 	    summary?: string;
 	    tags?: string[];
 	    error?: string;
@@ -55,6 +56,7 @@ export namespace models {
 	        this.title = source["title"];
 	        this.url = source["url"];
 	        this.status = source["status"];
+	        this.category = source["category"];
 	        this.summary = source["summary"];
 	        this.tags = source["tags"];
 	        this.error = source["error"];
@@ -125,6 +127,7 @@ export namespace models {
 	    url: string;
 	    title: string;
 	    description: string;
+	    category: string;
 	    favicon_url: string;
 	    cover_image: string;
 	    content_raw: string;
@@ -149,6 +152,7 @@ export namespace models {
 	        this.url = source["url"];
 	        this.title = source["title"];
 	        this.description = source["description"];
+	        this.category = source["category"];
 	        this.favicon_url = source["favicon_url"];
 	        this.cover_image = source["cover_image"];
 	        this.content_raw = source["content_raw"];
@@ -179,6 +183,20 @@ export namespace models {
 		    }
 		    return a;
 		}
+	}
+	export class CategoryCount {
+	    name: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CategoryCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.count = source["count"];
+	    }
 	}
 	export class ImportResult {
 	    total_imported: number;

@@ -26,8 +26,12 @@ export function GetBookmark(arg1) {
   return window['go']['main']['App']['GetBookmark'](arg1);
 }
 
-export function GetBookmarks(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['GetBookmarks'](arg1, arg2, arg3, arg4);
+export function GetBookmarks(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetBookmarks'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GetCategories() {
+  return window['go']['main']['App']['GetCategories']();
 }
 
 export function GetStats() {
@@ -40,6 +44,10 @@ export function GetTags() {
 
 export function ImportBookmarkFile(arg1) {
   return window['go']['main']['App']['ImportBookmarkFile'](arg1);
+}
+
+export function ResetAndReanalyzeAll() {
+  return window['go']['main']['App']['ResetAndReanalyzeAll']();
 }
 
 export function SaveAIConfig(arg1, arg2, arg3) {

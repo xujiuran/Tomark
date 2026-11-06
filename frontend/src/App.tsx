@@ -3,24 +3,39 @@ import {
   Bookmark as BookmarkIcon, Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
   CheckCircle, Globe, RefreshCw, X, BookOpen, Layers, FileUp,
-  Clock, AlertCircle
+  Clock, AlertCircle, FolderTree, Code2
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
-  ToggleArchive, AnalyzeBookmark, GetTags, GetStats, 
+  ToggleArchive, AnalyzeBookmark, GetTags, GetCategories, GetStats, 
   SaveAIConfig, GetAIConfig, SelectAndImportBookmarks, 
-  StartBatchAIAnalysis, GetAnalysisProgress
+  StartBatchAIAnalysis, GetAnalysisProgress, ResetAndReanalyzeAll
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
+
+const CATEGORY_ICONS: Record<string, string> = {
+  '代码与开源平台': '💻',
+  '视频与流媒体': '🎬',
+  '技术文档与教程': '📖',
+  '技术博客与社区': '✍️',
+  'AI 与前沿技术': '🤖',
+  '设计与视觉灵感': '🎨',
+  '效率与开发工具': '⚡',
+  '资讯与社交媒体': '🌐',
+  '生活与日常休闲': '☕',
+  '商业与职场金融': '💼',
+};
 
 export default function App() {
   const [bookmarks, setBookmarks] = useState<models.Bookmark[]>([]);
   const [tags, setTags] = useState<models.Tag[]>([]);
+  const [categories, setCategories] = useState<models.CategoryCount[]>([]);
   const [stats, setStats] = useState<models.Stats | null>(null);
   const [selectedBookmark, setSelectedBookmark] = useState<models.Bookmark | null>(null);
   
   // Navigation & filters
   const [currentTab, setCurrentTab] = useState<'all' | 'favorites' | 'archived'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -84,9 +99,12 @@ export default function App() {
     try {
       const fav = currentTab === 'favorites';
       const arch = currentTab === 'archived';
-      const list = await GetBookmarks(searchQuery, selectedTag, fav, arch);
+      const list = await GetBookmarks(searchQuery, selectedTag, selectedCategory, fav, arch);
       setBookmarks(list || []);
       
+      const cats = await GetCategories();
+      setCategories(cats || []);
+
       const t = await GetTags();
       setTags(t || []);
       
@@ -104,7 +122,7 @@ export default function App() {
 
   useEffect(() => {
     loadData();
-  }, [currentTab, selectedTag, searchQuery]);
+  }, [currentTab, selectedCategory, selectedTag, searchQuery]);
 
   // Load AI configuration on mount
   useEffect(() => {
@@ -283,9 +301,9 @@ export default function App() {
           {/* 导航菜单 */}
           <div className="p-3 space-y-1">
             <button
-              onClick={() => { setCurrentTab('all'); setSelectedTag(''); }}
+              onClick={() => { setCurrentTab('all'); setSelectedCategory(''); setSelectedTag(''); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                currentTab === 'all' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+                currentTab === 'all' && !selectedCategory && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -296,9 +314,9 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { setCurrentTab('favorites'); setSelectedTag(''); }}
+              onClick={() => { setCurrentTab('favorites'); setSelectedCategory(''); setSelectedTag(''); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                currentTab === 'favorites' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+                currentTab === 'favorites' && !selectedCategory && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -309,9 +327,9 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { setCurrentTab('archived'); setSelectedTag(''); }}
+              onClick={() => { setCurrentTab('archived'); setSelectedCategory(''); setSelectedTag(''); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                currentTab === 'archived' && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+                currentTab === 'archived' && !selectedCategory && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -320,6 +338,41 @@ export default function App() {
               </div>
               <span className="text-[10px] opacity-75">{stats?.archived ?? 0}</span>
             </button>
+          </div>
+
+          {/* 核心分类体系 (10 大标准分类) */}
+          <div className="px-3 py-2 border-t border-slate-800/60">
+            <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <FolderTree className="w-3.5 h-3.5 text-blue-400" />
+                <span>分类目录</span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {categories.length}
+              </span>
+            </div>
+            <div className="mt-1 space-y-0.5 max-h-52 overflow-y-auto pr-0.5">
+              {categories.map((c) => (
+                <button
+                  key={c.name}
+                  onClick={() => setSelectedCategory(selectedCategory === c.name ? '' : c.name)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition ${
+                    selectedCategory === c.name 
+                      ? 'bg-blue-600/30 text-blue-400 border border-blue-500/40 font-medium' 
+                      : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="text-xs shrink-0">{CATEGORY_ICONS[c.name] || '📁'}</span>
+                    <span className="truncate">{c.name}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">{c.count}</span>
+                </button>
+              ))}
+              {categories.length === 0 && (
+                <p className="text-[11px] text-slate-500 px-2 py-2 italic">暂无分类，AI 深度分析后自动归入标准分类</p>
+              )}
+            </div>
           </div>
 
           {/* 标签列表 */}
@@ -372,6 +425,12 @@ export default function App() {
                 {currentTab === 'favorites' && '星标收藏'}
                 {currentTab === 'archived' && '归档箱'}
               </span>
+              {selectedCategory && (
+                <span className="flex items-center gap-1 text-indigo-400 font-medium bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-800/40">
+                  <span>{CATEGORY_ICONS[selectedCategory] || '📁'}</span>
+                  <span>{selectedCategory}</span>
+                </span>
+              )}
               {selectedTag && <span className="text-blue-400 font-mono">#{selectedTag}</span>}
               <span className="text-slate-600 font-mono">({bookmarks.length})</span>
             </div>
@@ -453,10 +512,16 @@ export default function App() {
                     )
                   )}
 
-                  {/* Tags row */}
-                  {bm.tags && bm.tags.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {bm.tags.map((t, idx) => (
+                  {/* Category & Tags row */}
+                  {((bm.tags && bm.tags.length > 0) || bm.category) && (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      {bm.category && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50 flex items-center gap-1">
+                          <span>{CATEGORY_ICONS[bm.category] || '📁'}</span>
+                          <span>{bm.category}</span>
+                        </span>
+                      )}
+                      {bm.tags && bm.tags.map((t, idx) => (
                         <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/50">
                           #{t}
                         </span>
@@ -514,6 +579,14 @@ export default function App() {
                   <p className="text-xs text-slate-400 mt-1 break-all font-mono">
                     {selectedBookmark.url}
                   </p>
+                  {selectedBookmark.category && (
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 font-medium inline-flex items-center gap-1">
+                        <span>{CATEGORY_ICONS[selectedBookmark.category] || '📁'}</span>
+                        <span>{selectedBookmark.category}</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* AI 洞察分析区块 */}
@@ -534,7 +607,17 @@ export default function App() {
                   </div>
 
                   {selectedBookmark.ai_summary ? (
-                    <div className="space-y-2 text-xs">
+                    <div className="space-y-2.5 text-xs">
+                      {selectedBookmark.category && (
+                        <div className="flex items-center justify-between pb-2 border-b border-blue-900/30">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">归属分类</span>
+                          <span className="text-xs font-medium text-blue-300 flex items-center gap-1">
+                            <span>{CATEGORY_ICONS[selectedBookmark.category] || '📁'}</span>
+                            <span>{selectedBookmark.category}</span>
+                          </span>
+                        </div>
+                      )}
+
                       <div>
                         <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">核心摘要</span>
                         <p className="text-slate-200 mt-0.5 leading-relaxed">{selectedBookmark.ai_summary}</p>
@@ -812,16 +895,31 @@ export default function App() {
 
               <div className="flex items-center gap-2">
                 {!analysisProgress?.is_running && (
-                  <button
-                    onClick={async () => {
-                      const p = await StartBatchAIAnalysis();
-                      setAnalysisProgress(p);
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>启动/继续分析</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={async () => {
+                        const p = await StartBatchAIAnalysis();
+                        setAnalysisProgress(p);
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition"
+                      title="分析尚未处理或未分类的书签"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>启动/继续分析</span>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("确定要对所有书签重新进行标准分类与深度摘要吗？")) return;
+                        const p = await ResetAndReanalyzeAll();
+                        setAnalysisProgress(p);
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+                      title="根据最新的 10 大分类标准，重新对全部书签进行 AI 精准分析"
+                    >
+                      <Layers className="w-3 h-3" />
+                      <span>重新全量分析</span>
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => setIsProgressModalOpen(false)}
@@ -921,6 +1019,12 @@ export default function App() {
                           {task.status === 'failed' && (
                             <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-red-950/60 border border-red-800 text-red-400 shrink-0 font-medium">
                               <AlertCircle className="w-2.5 h-2.5" /> 失败
+                            </span>
+                          )}
+                          {task.category && (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800 text-blue-300 shrink-0 font-medium">
+                              <span>{CATEGORY_ICONS[task.category] || '📁'}</span>
+                              <span>{task.category}</span>
                             </span>
                           )}
                           <h4 className="font-semibold text-slate-100 truncate">{task.title || task.url}</h4>

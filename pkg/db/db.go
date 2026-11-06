@@ -60,6 +60,7 @@ func (d *DB) migrate() error {
 		url TEXT NOT NULL UNIQUE,
 		title TEXT NOT NULL,
 		description TEXT,
+		category TEXT DEFAULT '',
 		favicon_url TEXT,
 		cover_image TEXT,
 		content_raw TEXT,
@@ -89,8 +90,12 @@ func (d *DB) migrate() error {
 		value TEXT NOT NULL
 	);
 	`
-	_, err := d.conn.Exec(schema)
-	return err
+	if _, err := d.conn.Exec(schema); err != nil {
+		return err
+	}
+	// Migrate existing database to add category if it doesn't exist
+	_, _ = d.conn.Exec("ALTER TABLE bookmarks ADD COLUMN category TEXT DEFAULT '';")
+	return nil
 }
 
 // CreateBookmark inserts or updates a bookmark.
@@ -109,13 +114,14 @@ func (d *DB) CreateBookmark(b *models.Bookmark, tags []string) (*models.Bookmark
 
 	query := `
 	INSERT INTO bookmarks (
-		id, url, title, description, favicon_url, cover_image,
+		id, url, title, description, category, favicon_url, cover_image,
 		content_raw, ai_summary, ai_key_points, status_code,
 		is_archived, is_favorite, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(url) DO UPDATE SET
 		title=excluded.title,
 		description=excluded.description,
+		category=CASE WHEN excluded.category != '' THEN excluded.category ELSE bookmarks.category END,
 		favicon_url=excluded.favicon_url,
 		cover_image=excluded.cover_image,
 		content_raw=excluded.content_raw,
@@ -133,7 +139,7 @@ func (d *DB) CreateBookmark(b *models.Bookmark, tags []string) (*models.Bookmark
 
 	err := d.conn.QueryRow(
 		query,
-		b.ID, b.URL, b.Title, b.Description, b.FaviconURL, b.CoverImage,
+		b.ID, b.URL, b.Title, b.Description, b.Category, b.FaviconURL, b.CoverImage,
 		b.ContentRaw, b.AISummary, string(keyPointsJSON), b.StatusCode,
 		isArch, isFav, b.CreatedAt, b.UpdatedAt,
 	).Scan(&b.ID)
@@ -173,12 +179,13 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO bookmarks (
-			id, url, title, description, favicon_url, cover_image,
+			id, url, title, description, category, favicon_url, cover_image,
 			content_raw, ai_summary, ai_key_points, status_code,
 			is_archived, is_favorite, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET
 			title=excluded.title,
+			category=CASE WHEN excluded.category != '' THEN excluded.category ELSE bookmarks.category END,
 			favicon_url=CASE WHEN bookmarks.favicon_url='' THEN excluded.favicon_url ELSE bookmarks.favicon_url END,
 			updated_at=CURRENT_TIMESTAMP;
 	`)
@@ -216,7 +223,7 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 
 		keyPointsJSON, _ := json.Marshal(b.AIKeyPoints)
 		_, err := stmt.Exec(
-			b.ID, b.URL, b.Title, b.Description, b.FaviconURL, b.CoverImage,
+			b.ID, b.URL, b.Title, b.Description, b.Category, b.FaviconURL, b.CoverImage,
 			b.ContentRaw, b.AISummary, string(keyPointsJSON), b.StatusCode,
 			isArch, isFav, now, now,
 		)
@@ -247,17 +254,17 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 	}, nil
 }
 
-// GetUnanalyzedBookmarks retrieves bookmarks that haven't been summarized by AI.
+// GetUnanalyzedBookmarks retrieves bookmarks that haven't been summarized or categorized by AI.
 func (d *DB) GetUnanalyzedBookmarks(limit int) ([]*models.Bookmark, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	query := `
-	SELECT id, url, title, description, favicon_url, cover_image,
+	SELECT id, url, title, description, category, favicon_url, cover_image,
 	       content_raw, ai_summary, ai_key_points, status_code,
 	       is_archived, is_favorite, created_at, updated_at
 	FROM bookmarks
-	WHERE (ai_summary IS NULL OR ai_summary = '') AND is_archived = 0
+	WHERE (ai_summary IS NULL OR ai_summary = '' OR category IS NULL OR category = '') AND is_archived = 0
 	ORDER BY created_at DESC
 	LIMIT ?;
 	`
@@ -273,7 +280,7 @@ func (d *DB) GetUnanalyzedBookmarks(limit int) ([]*models.Bookmark, error) {
 		var kpStr string
 		var isArch, isFav int
 		if err := rows.Scan(
-			&b.ID, &b.URL, &b.Title, &b.Description, &b.FaviconURL, &b.CoverImage,
+			&b.ID, &b.URL, &b.Title, &b.Description, &b.Category, &b.FaviconURL, &b.CoverImage,
 			&b.ContentRaw, &b.AISummary, &kpStr, &b.StatusCode,
 			&isArch, &isFav, &b.CreatedAt, &b.UpdatedAt,
 		); err != nil {
@@ -287,7 +294,7 @@ func (d *DB) GetUnanalyzedBookmarks(limit int) ([]*models.Bookmark, error) {
 }
 
 // GetBookmarks fetches bookmarks according to search filters.
-func (d *DB) GetBookmarks(search, tagName string, favoriteOnly, archivedOnly bool) ([]*models.Bookmark, error) {
+func (d *DB) GetBookmarks(search, tagName, category string, favoriteOnly, archivedOnly bool) ([]*models.Bookmark, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -298,6 +305,11 @@ func (d *DB) GetBookmarks(search, tagName string, favoriteOnly, archivedOnly boo
 		like := "%" + search + "%"
 		conditions = append(conditions, "(b.title LIKE ? OR b.description LIKE ? OR b.url LIKE ? OR b.ai_summary LIKE ?)")
 		args = append(args, like, like, like, like)
+	}
+
+	if category != "" {
+		conditions = append(conditions, "b.category = ?")
+		args = append(args, category)
 	}
 
 	if favoriteOnly {
@@ -321,7 +333,7 @@ func (d *DB) GetBookmarks(search, tagName string, favoriteOnly, archivedOnly boo
 	}
 
 	query := fmt.Sprintf(`
-	SELECT b.id, b.url, b.title, b.description, b.favicon_url, b.cover_image,
+	SELECT b.id, b.url, b.title, b.description, b.category, b.favicon_url, b.cover_image,
 	       b.content_raw, b.ai_summary, b.ai_key_points, b.status_code,
 	       b.is_archived, b.is_favorite, b.created_at, b.updated_at
 	FROM bookmarks b
@@ -342,7 +354,7 @@ func (d *DB) GetBookmarks(search, tagName string, favoriteOnly, archivedOnly boo
 		var isArch, isFav int
 
 		err := rows.Scan(
-			&b.ID, &b.URL, &b.Title, &b.Description, &b.FaviconURL, &b.CoverImage,
+			&b.ID, &b.URL, &b.Title, &b.Description, &b.Category, &b.FaviconURL, &b.CoverImage,
 			&b.ContentRaw, &b.AISummary, &keyPointsStr, &b.StatusCode,
 			&isArch, &isFav, &b.CreatedAt, &b.UpdatedAt,
 		)
@@ -387,12 +399,12 @@ func (d *DB) GetBookmarkByID(id string) (*models.Bookmark, error) {
 	var isArch, isFav int
 
 	err := d.conn.QueryRow(`
-		SELECT id, url, title, description, favicon_url, cover_image,
+		SELECT id, url, title, description, category, favicon_url, cover_image,
 		       content_raw, ai_summary, ai_key_points, status_code,
 		       is_archived, is_favorite, created_at, updated_at
 		FROM bookmarks WHERE id = ?
 	`, id).Scan(
-		&b.ID, &b.URL, &b.Title, &b.Description, &b.FaviconURL, &b.CoverImage,
+		&b.ID, &b.URL, &b.Title, &b.Description, &b.Category, &b.FaviconURL, &b.CoverImage,
 		&b.ContentRaw, &b.AISummary, &keyPointsStr, &b.StatusCode,
 		&isArch, &isFav, &b.CreatedAt, &b.UpdatedAt,
 	)
@@ -424,16 +436,16 @@ func (d *DB) GetBookmarkByID(id string) (*models.Bookmark, error) {
 }
 
 // UpdateBookmarkAI updates AI analysis fields.
-func (d *DB) UpdateBookmarkAI(id, summary string, keyPoints, tags []string) error {
+func (d *DB) UpdateBookmarkAI(id, summary, category string, keyPoints, tags []string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	kpJSON, _ := json.Marshal(keyPoints)
 	_, err := d.conn.Exec(`
 		UPDATE bookmarks 
-		SET ai_summary = ?, ai_key_points = ?, updated_at = CURRENT_TIMESTAMP
+		SET ai_summary = ?, category = ?, ai_key_points = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, summary, string(kpJSON), id)
+	`, summary, category, string(kpJSON), id)
 	if err != nil {
 		return err
 	}
@@ -454,6 +466,14 @@ func (d *DB) UpdateBookmarkAI(id, summary string, keyPoints, tags []string) erro
 	}
 
 	return nil
+}
+
+// ResetAllAnalysis resets all AI summaries and categories for re-processing.
+func (d *DB) ResetAllAnalysis() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	_, err := d.conn.Exec("UPDATE bookmarks SET ai_summary = '', category = '', ai_key_points = '[]'")
+	return err
 }
 
 // ToggleFavorite toggles favorite status.
@@ -522,6 +542,34 @@ func (d *DB) GetTags() ([]*models.Tag, error) {
 		tags = append(tags, &t)
 	}
 	return tags, nil
+}
+
+// GetCategories returns all categories with their bookmark count.
+func (d *DB) GetCategories() ([]*models.CategoryCount, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	query := `
+	SELECT category, COUNT(*) as count
+	FROM bookmarks
+	WHERE category IS NOT NULL AND category != '' AND is_archived = 0
+	GROUP BY category
+	ORDER BY count DESC;
+	`
+	rows, err := d.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*models.CategoryCount
+	for rows.Next() {
+		var c models.CategoryCount
+		if err := rows.Scan(&c.Name, &c.Count); err == nil {
+			list = append(list, &c)
+		}
+	}
+	return list, nil
 }
 
 // GetStats returns summary statistics.
