@@ -7,7 +7,7 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "xuchaojie",
-    "email": "chaojie.xu@visionacademy.cn"
+    "name": "Tomark",
+    "email": ""
   }
 }
