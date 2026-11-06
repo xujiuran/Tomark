@@ -10,6 +10,8 @@ export function DeleteBookmark(arg1:string):Promise<void>;
 
 export function ExportArcBookmarks():Promise<string>;
 
+export function FetchAndSaveContent(arg1:string):Promise<string>;
+
 export function GetAIConfig():Promise<models.AIConfig>;
 
 export function GetAnalysisProgress():Promise<models.AnalysisProgress>;
@@ -43,3 +45,7 @@ export function StartBatchAIAnalysis():Promise<models.AnalysisProgress>;
 export function ToggleArchive(arg1:string):Promise<boolean>;
 
 export function ToggleFavorite(arg1:string):Promise<boolean>;
+
+export function UpdateBookmarkHighlights(arg1:string,arg2:string):Promise<void>;
+
+export function UpdateBookmarkNotes(arg1:string,arg2:string):Promise<void>;

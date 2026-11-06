@@ -133,6 +133,8 @@ export namespace models {
 	    favicon_url: string;
 	    cover_image: string;
 	    content_raw: string;
+	    user_notes: string;
+	    highlights: string;
 	    ai_summary: string;
 	    ai_key_points: string[];
 	    tags: string[];
@@ -160,6 +162,8 @@ export namespace models {
 	        this.favicon_url = source["favicon_url"];
 	        this.cover_image = source["cover_image"];
 	        this.content_raw = source["content_raw"];
+	        this.user_notes = source["user_notes"];
+	        this.highlights = source["highlights"];
 	        this.ai_summary = source["ai_summary"];
 	        this.ai_key_points = source["ai_key_points"];
 	        this.tags = source["tags"];

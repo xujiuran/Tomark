@@ -139,6 +139,52 @@ func (a *App) ToggleArchive(id string) (bool, error) {
 	return a.db.ToggleArchive(id)
 }
 
+// UpdateBookmarkNotes updates the user's personal notes/reflections for a bookmark.
+func (a *App) UpdateBookmarkNotes(id, notes string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.UpdateBookmarkNotes(id, notes)
+}
+
+// UpdateBookmarkHighlights updates the JSON highlights for a bookmark.
+func (a *App) UpdateBookmarkHighlights(id, highlightsJSON string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.UpdateBookmarkHighlights(id, highlightsJSON)
+}
+
+// FetchAndSaveContent scrapes clean article text if missing and persists it to local SQLite.
+func (a *App) FetchAndSaveContent(id string) (string, error) {
+	if a.db == nil {
+		return "", fmt.Errorf("database not initialized")
+	}
+	bm, err := a.db.GetBookmarkByID(id)
+	if err != nil {
+		return "", err
+	}
+	if bm.ContentRaw != "" {
+		return bm.ContentRaw, nil
+	}
+
+	pageMeta, err := scraper.FetchPage(bm.URL)
+	if err != nil {
+		return "", fmt.Errorf("正文抓取失败: %w", err)
+	}
+	content := pageMeta.ContentText
+	if content == "" {
+		content = pageMeta.Excerpt
+	}
+	if content == "" {
+		content = pageMeta.Description
+	}
+	if content != "" {
+		_ = a.db.SaveBookmarkContent(id, content)
+	}
+	return content, nil
+}
+
 // AnalyzeBookmark triggers on-demand AI analysis for a specific bookmark.
 func (a *App) AnalyzeBookmark(id string) (*models.AISummaryResult, error) {
 	if a.db == nil {
@@ -427,6 +473,9 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 						}
 						if target.Description == "" && page.Description != "" {
 							target.Description = page.Description
+						}
+						if content != "" {
+							_ = a.db.SaveBookmarkContent(target.ID, content)
 						}
 					}
 				}

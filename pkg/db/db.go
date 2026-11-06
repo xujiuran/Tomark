@@ -107,6 +107,8 @@ func (d *DB) migrate() error {
 	_, _ = d.conn.Exec("ALTER TABLE bookmarks ADD COLUMN category TEXT DEFAULT '';")
 	_, _ = d.conn.Exec("ALTER TABLE bookmarks ADD COLUMN sub_category TEXT DEFAULT '';")
 	_, _ = d.conn.Exec("ALTER TABLE bookmarks ADD COLUMN domain TEXT DEFAULT '';")
+	_, _ = d.conn.Exec("ALTER TABLE bookmarks ADD COLUMN user_notes TEXT DEFAULT '';")
+	_, _ = d.conn.Exec("ALTER TABLE bookmarks ADD COLUMN highlights TEXT DEFAULT '[]';")
 	_, _ = d.conn.Exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_domain ON bookmarks(domain);")
 	_, _ = d.conn.Exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_category ON bookmarks(category);")
 
@@ -156,14 +158,18 @@ func (d *DB) CreateBookmark(b *models.Bookmark, tags []string) (*models.Bookmark
 		}
 	}
 
+	if b.Highlights == "" {
+		b.Highlights = "[]"
+	}
+
 	keyPointsJSON, _ := json.Marshal(b.AIKeyPoints)
 
 	query := `
 	INSERT INTO bookmarks (
 		id, url, title, description, category, sub_category, domain, favicon_url, cover_image,
-		content_raw, ai_summary, ai_key_points, status_code,
+		content_raw, user_notes, highlights, ai_summary, ai_key_points, status_code,
 		is_archived, is_favorite, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(url) DO UPDATE SET
 		title=excluded.title,
 		description=excluded.description,
@@ -172,7 +178,9 @@ func (d *DB) CreateBookmark(b *models.Bookmark, tags []string) (*models.Bookmark
 		domain=excluded.domain,
 		favicon_url=excluded.favicon_url,
 		cover_image=excluded.cover_image,
-		content_raw=excluded.content_raw,
+		content_raw=CASE WHEN excluded.content_raw != '' THEN excluded.content_raw ELSE bookmarks.content_raw END,
+		user_notes=CASE WHEN excluded.user_notes != '' THEN excluded.user_notes ELSE bookmarks.user_notes END,
+		highlights=CASE WHEN excluded.highlights != '[]' AND excluded.highlights != '' THEN excluded.highlights ELSE bookmarks.highlights END,
 		updated_at=excluded.updated_at
 	RETURNING id;
 	`
@@ -188,7 +196,7 @@ func (d *DB) CreateBookmark(b *models.Bookmark, tags []string) (*models.Bookmark
 	err := d.conn.QueryRow(
 		query,
 		b.ID, b.URL, b.Title, b.Description, b.Category, b.SubCategory, b.Domain, b.FaviconURL, b.CoverImage,
-		b.ContentRaw, b.AISummary, string(keyPointsJSON), b.StatusCode,
+		b.ContentRaw, b.UserNotes, b.Highlights, b.AISummary, string(keyPointsJSON), b.StatusCode,
 		isArch, isFav, b.CreatedAt, b.UpdatedAt,
 	).Scan(&b.ID)
 	if err != nil {
@@ -228,15 +236,18 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 	stmt, err := tx.Prepare(`
 		INSERT INTO bookmarks (
 			id, url, title, description, category, sub_category, domain, favicon_url, cover_image,
-			content_raw, ai_summary, ai_key_points, status_code,
+			content_raw, user_notes, highlights, ai_summary, ai_key_points, status_code,
 			is_archived, is_favorite, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET
 			title=excluded.title,
 			category=CASE WHEN excluded.category != '' THEN excluded.category ELSE bookmarks.category END,
 			sub_category=CASE WHEN excluded.sub_category != '' THEN excluded.sub_category ELSE bookmarks.sub_category END,
 			domain=excluded.domain,
 			favicon_url=CASE WHEN bookmarks.favicon_url='' THEN excluded.favicon_url ELSE bookmarks.favicon_url END,
+			content_raw=CASE WHEN excluded.content_raw != '' THEN excluded.content_raw ELSE bookmarks.content_raw END,
+			user_notes=CASE WHEN excluded.user_notes != '' THEN excluded.user_notes ELSE bookmarks.user_notes END,
+			highlights=CASE WHEN excluded.highlights != '[]' AND excluded.highlights != '' THEN excluded.highlights ELSE bookmarks.highlights END,
 			updated_at=CURRENT_TIMESTAMP;
 	`)
 	if err != nil {
@@ -315,10 +326,14 @@ func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResul
 			isFav = 1
 		}
 
+		if b.Highlights == "" {
+			b.Highlights = "[]"
+		}
+
 		keyPointsJSON, _ := json.Marshal(b.AIKeyPoints)
 		_, err = stmt.Exec(
 			b.ID, b.URL, b.Title, b.Description, b.Category, b.SubCategory, b.Domain, b.FaviconURL, b.CoverImage,
-			b.ContentRaw, b.AISummary, string(keyPointsJSON), b.StatusCode,
+			b.ContentRaw, b.UserNotes, b.Highlights, b.AISummary, string(keyPointsJSON), b.StatusCode,
 			isArch, isFav, now, now,
 		)
 		if err != nil {
@@ -398,8 +413,8 @@ func (d *DB) GetBookmarks(search, tagName, category, domainFilter string, favori
 
 	if search != "" {
 		like := "%" + search + "%"
-		conditions = append(conditions, "(b.title LIKE ? OR b.description LIKE ? OR b.url LIKE ? OR b.ai_summary LIKE ? OR b.sub_category LIKE ?)")
-		args = append(args, like, like, like, like, like)
+		conditions = append(conditions, "(b.title LIKE ? OR b.description LIKE ? OR b.url LIKE ? OR b.ai_summary LIKE ? OR b.sub_category LIKE ? OR b.user_notes LIKE ?)")
+		args = append(args, like, like, like, like, like, like)
 	}
 
 	if category != "" && domainFilter == "" {
@@ -434,7 +449,7 @@ func (d *DB) GetBookmarks(search, tagName, category, domainFilter string, favori
 
 	query := fmt.Sprintf(`
 	SELECT b.id, b.url, b.title, b.description, b.category, b.sub_category, b.domain, b.favicon_url, b.cover_image,
-	       b.content_raw, b.ai_summary, b.ai_key_points, b.status_code,
+	       b.content_raw, b.user_notes, b.highlights, b.ai_summary, b.ai_key_points, b.status_code,
 	       b.is_archived, b.is_favorite, b.created_at, b.updated_at
 	FROM bookmarks b
 	%s
@@ -455,7 +470,7 @@ func (d *DB) GetBookmarks(search, tagName, category, domainFilter string, favori
 
 		err := rows.Scan(
 			&b.ID, &b.URL, &b.Title, &b.Description, &b.Category, &b.SubCategory, &b.Domain, &b.FaviconURL, &b.CoverImage,
-			&b.ContentRaw, &b.AISummary, &keyPointsStr, &b.StatusCode,
+			&b.ContentRaw, &b.UserNotes, &b.Highlights, &b.AISummary, &keyPointsStr, &b.StatusCode,
 			&isArch, &isFav, &b.CreatedAt, &b.UpdatedAt,
 		)
 		if err != nil {
@@ -500,12 +515,12 @@ func (d *DB) GetBookmarkByID(id string) (*models.Bookmark, error) {
 
 	err := d.conn.QueryRow(`
 		SELECT id, url, title, description, category, sub_category, domain, favicon_url, cover_image,
-		       content_raw, ai_summary, ai_key_points, status_code,
+		       content_raw, user_notes, highlights, ai_summary, ai_key_points, status_code,
 		       is_archived, is_favorite, created_at, updated_at
 		FROM bookmarks WHERE id = ?
 	`, id).Scan(
 		&b.ID, &b.URL, &b.Title, &b.Description, &b.Category, &b.SubCategory, &b.Domain, &b.FaviconURL, &b.CoverImage,
-		&b.ContentRaw, &b.AISummary, &keyPointsStr, &b.StatusCode,
+		&b.ContentRaw, &b.UserNotes, &b.Highlights, &b.AISummary, &keyPointsStr, &b.StatusCode,
 		&isArch, &isFav, &b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
@@ -590,6 +605,45 @@ func (d *DB) UpdateBookmarkAI(id, summary, category string, keyPoints, tags []st
 	}
 
 	return nil
+}
+
+// UpdateBookmarkNotes updates user notes for a bookmark.
+func (d *DB) UpdateBookmarkNotes(id, notes string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	_, err := d.conn.Exec(`
+		UPDATE bookmarks 
+		SET user_notes = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?;
+	`, notes, id)
+	return err
+}
+
+// UpdateBookmarkHighlights updates JSON highlights for a bookmark.
+func (d *DB) UpdateBookmarkHighlights(id, highlightsJSON string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	_, err := d.conn.Exec(`
+		UPDATE bookmarks 
+		SET highlights = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?;
+	`, highlightsJSON, id)
+	return err
+}
+
+// SaveBookmarkContent saves extracted article text.
+func (d *DB) SaveBookmarkContent(id, contentRaw string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	_, err := d.conn.Exec(`
+		UPDATE bookmarks 
+		SET content_raw = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?;
+	`, contentRaw, id)
+	return err
 }
 
 // ResetAllAnalysis resets all AI summaries and categories for re-processing.

@@ -18,6 +18,10 @@ export function ExportArcBookmarks() {
   return window['go']['main']['App']['ExportArcBookmarks']();
 }
 
+export function FetchAndSaveContent(arg1) {
+  return window['go']['main']['App']['FetchAndSaveContent'](arg1);
+}
+
 export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
 }
@@ -84,4 +88,12 @@ export function ToggleArchive(arg1) {
 
 export function ToggleFavorite(arg1) {
   return window['go']['main']['App']['ToggleFavorite'](arg1);
+}
+
+export function UpdateBookmarkHighlights(arg1, arg2) {
+  return window['go']['main']['App']['UpdateBookmarkHighlights'](arg1, arg2);
+}
+
+export function UpdateBookmarkNotes(arg1, arg2) {
+  return window['go']['main']['App']['UpdateBookmarkNotes'](arg1, arg2);
 }

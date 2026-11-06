@@ -14,6 +14,8 @@ type Bookmark struct {
 	FaviconURL  string    `json:"favicon_url"`
 	CoverImage  string    `json:"cover_image"`
 	ContentRaw  string    `json:"content_raw"`
+	UserNotes   string    `json:"user_notes"`
+	Highlights  string    `json:"highlights"`
 	AISummary   string    `json:"ai_summary"`
 	AIKeyPoints []string  `json:"ai_key_points"`
 	Tags        []string  `json:"tags"`
