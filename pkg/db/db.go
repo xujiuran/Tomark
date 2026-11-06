@@ -402,7 +402,7 @@ func (d *DB) GetBookmarks(search, tagName, category, domainFilter string, favori
 		args = append(args, like, like, like, like, like)
 	}
 
-	if category != "" {
+	if category != "" && domainFilter == "" {
 		conditions = append(conditions, "b.category = ?")
 		args = append(args, category)
 	}

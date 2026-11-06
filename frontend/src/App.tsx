@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Bookmark as BookmarkIcon, Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
@@ -63,6 +63,27 @@ export default function App() {
   const [aiApiKey, setAiApiKey] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Track active filters in Ref to eliminate stale closures in timers and background updates
+  const filtersRef = useRef({
+    currentTab,
+    selectedCategory,
+    selectedDomain,
+    selectedTag,
+    searchQuery,
+  });
+
+  useEffect(() => {
+    filtersRef.current = {
+      currentTab,
+      selectedCategory,
+      selectedDomain,
+      selectedTag,
+      searchQuery,
+    };
+  }, [currentTab, selectedCategory, selectedDomain, selectedTag, searchQuery]);
+
+  const reqIdRef = useRef(0);
+
   // Periodically check analysis progress if running or modal is open
   useEffect(() => {
     let timer: any;
@@ -118,13 +139,17 @@ export default function App() {
     }
   };
 
-  // Load initial data
-  const loadData = async () => {
+  // Load bookmarks & metadata using latest filter state with race-condition prevention
+  const loadData = async (overrideFilters?: Partial<typeof filtersRef.current>) => {
+    const cur = { ...filtersRef.current, ...overrideFilters };
+    const myReqId = ++reqIdRef.current;
     try {
-      const fav = currentTab === 'favorites';
-      const arch = currentTab === 'archived';
-      const list = await GetBookmarks(searchQuery, selectedTag, selectedCategory, selectedDomain, fav, arch);
-      setBookmarks(list || []);
+      const fav = cur.currentTab === 'favorites';
+      const arch = cur.currentTab === 'archived';
+      const list = await GetBookmarks(cur.searchQuery, cur.selectedTag, cur.selectedCategory, cur.selectedDomain, fav, arch);
+      if (myReqId === reqIdRef.current) {
+        setBookmarks(list || []);
+      }
       
       const hiers = await GetCategoryHierarchy();
       setHierarchies(hiers || []);
@@ -135,7 +160,7 @@ export default function App() {
       const s = await GetStats();
       setStats(s);
 
-      if (selectedBookmark) {
+      if (selectedBookmark && myReqId === reqIdRef.current) {
         const updated = list?.find(b => b.id === selectedBookmark.id);
         if (updated) setSelectedBookmark(updated);
       }
@@ -442,10 +467,10 @@ export default function App() {
                     {isExpanded && cat.sub_categories && cat.sub_categories.length > 0 && (
                       <div className="pl-4 space-y-0.5 border-l border-slate-800/80 ml-3">
                         {cat.sub_categories.map((sub) => {
-                          const isSubSelected = selectedCategory === cat.name && selectedDomain === sub.domain;
+                          const isSubSelected = selectedDomain === sub.domain;
                           return (
                             <button
-                              key={sub.domain}
+                              key={`${cat.name}-${sub.domain}`}
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
