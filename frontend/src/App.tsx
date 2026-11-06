@@ -130,7 +130,7 @@ export default function App() {
 
   // Settings form
   const [aiBaseURL, setAiBaseURL] = useState('http://127.0.0.1:3425/v1');
-  const [aiModel, setAiModel] = useState('auto/deepseek-v4.1-flash');
+  const [aiModel, setAiModel] = useState('cpa/deepseek-v4.1-flash-1017');
   const [aiApiKey, setAiApiKey] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -251,7 +251,7 @@ export default function App() {
     GetAIConfig().then(cfg => {
       if (cfg) {
         setAiBaseURL(cfg.base_url || 'http://127.0.0.1:3425/v1');
-        setAiModel(cfg.model || 'auto/deepseek-v4.1-flash');
+        setAiModel(cfg.model || 'cpa/deepseek-v4.1-flash-1017');
         if (cfg.api_key) setAiApiKey(cfg.api_key);
       }
     }).catch(console.error);
@@ -2630,7 +2630,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setAiBaseURL('http://127.0.0.1:3425/v1');
-                    setAiModel('auto/deepseek-v4.1-flash');
+                    setAiModel('cpa/deepseek-v4.1-flash-1017');
                     setAiApiKey('');
                   }}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition ${

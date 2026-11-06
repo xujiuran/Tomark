@@ -47,7 +47,7 @@ func AnalyzeContent(title, targetURL, content, apiKey, baseURL, model string) (*
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	if model == "" {
-		model = "auto/deepseek-v4.1-flash"
+		model = "cpa/deepseek-v4.1-flash-1017"
 	}
 
 	isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
