@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Bookmark as BookmarkIcon, Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
-  CheckCircle, Globe, RefreshCw, X, BookOpen, Layers, FileUp
+  CheckCircle, Globe, RefreshCw, X, BookOpen, Layers, FileUp,
+  Clock, AlertCircle
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
@@ -31,6 +32,8 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<models.AnalysisProgress | null>(null);
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<'all' | 'completed' | 'processing' | 'pending' | 'failed'>('all');
 
   // Settings form
   const [aiBaseURL, setAiBaseURL] = useState('http://127.0.0.1:3425/v1');
@@ -38,16 +41,18 @@ export default function App() {
   const [aiApiKey, setAiApiKey] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Periodically check analysis progress if running
+  // Periodically check analysis progress if running or modal is open
   useEffect(() => {
     let timer: any;
     const checkProgress = async () => {
       try {
         const prog = await GetAnalysisProgress();
         setAnalysisProgress(prog);
-        if (prog && prog.is_running) {
-          await loadData();
-          timer = setTimeout(checkProgress, 2500);
+        if (prog && (prog.is_running || isProgressModalOpen)) {
+          if (prog.is_running) {
+            await loadData();
+          }
+          timer = setTimeout(checkProgress, 2000);
         }
       } catch (e) {
         console.error(e);
@@ -55,7 +60,7 @@ export default function App() {
     };
     checkProgress();
     return () => clearTimeout(timer);
-  }, []);
+  }, [isProgressModalOpen]);
 
   const handleImport = async () => {
     setIsImporting(true);
@@ -212,11 +217,24 @@ export default function App() {
 
         {/* 右侧：全局搜索框 + 导入/添加按钮 + 状态 + 设置 */}
         <div className="flex items-center gap-2.5" style={{ '--wails-draggable': 'no-drag' } as any}>
-          {analysisProgress?.is_running && (
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-900/40 border border-blue-500/40 text-[11px] text-blue-300">
-              <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
-              <span>AI 批量分析中 ({analysisProgress.processed}/{analysisProgress.total})</span>
-            </div>
+          {analysisProgress && (analysisProgress.total > 0 || analysisProgress.is_running) && (
+            <button
+              onClick={() => setIsProgressModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900/60 border border-blue-700/50 text-[11px] text-blue-300 transition shadow-sm shrink-0"
+              title="点击打开 AI 深度分析任务中心，查看每个书签的处理进度与结果"
+            >
+              {analysisProgress.is_running ? (
+                <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+              ) : (
+                <CheckCircle className="w-3 h-3 text-emerald-400" />
+              )}
+              <span className="font-medium">
+                {analysisProgress.is_running 
+                  ? `AI 分析中 (${analysisProgress.processed}/${analysisProgress.total})` 
+                  : `AI 分析 (${analysisProgress.processed}项)`}
+              </span>
+              <span className="text-[10px] text-blue-400/90 underline font-mono ml-0.5">查看结果</span>
+            </button>
           )}
 
           <div className="relative w-56 md:w-64">
@@ -770,6 +788,209 @@ export default function App() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. AI 深度分析任务中心弹窗 (Progress & Results Inspector Modal) */}
+      {isProgressModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-[#131926] border border-slate-700/80 rounded-2xl p-5 shadow-2xl flex flex-col max-h-[85vh]">
+            {/* 弹窗头部 */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">AI 深度分析任务中心</h3>
+                  <p className="text-[10px] text-slate-400">
+                    本地 Magpie 网关 · DeepSeek V4.1 Flash 实时处理
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!analysisProgress?.is_running && (
+                  <button
+                    onClick={async () => {
+                      const p = await StartBatchAIAnalysis();
+                      setAnalysisProgress(p);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>启动/继续分析</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsProgressModalOpen(false)}
+                  className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 总体进度条与指标 */}
+            <div className="py-3 border-b border-slate-800/80 shrink-0 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 font-medium">
+                  <span className="text-slate-200">
+                    {analysisProgress?.is_running ? '正在分析...' : '分析就绪'}
+                  </span>
+                  <span className="text-blue-400 font-mono">
+                    {analysisProgress?.processed || 0} / {analysisProgress?.total || 0}
+                  </span>
+                </div>
+                <span className="text-slate-400 text-[11px] font-mono">
+                  {analysisProgress?.total ? Math.round(((analysisProgress.processed || 0) / analysisProgress.total) * 100) : 0}%
+                </span>
+              </div>
+
+              {/* 进度条 */}
+              <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
+                  style={{
+                    width: `${analysisProgress?.total ? Math.round(((analysisProgress.processed || 0) / analysisProgress.total) * 100) : 0}%`
+                  }}
+                />
+              </div>
+
+              {/* 状态筛选标签 */}
+              <div className="flex items-center gap-1.5 pt-1">
+                {(['all', 'completed', 'processing', 'pending', 'failed'] as const).map((tab) => {
+                  const tasks = analysisProgress?.tasks || [];
+                  const count = tab === 'all' 
+                    ? tasks.length 
+                    : tasks.filter(t => t.status === tab).length;
+
+                  const labels: Record<string, string> = {
+                    all: '全部',
+                    completed: '已完成',
+                    processing: '分析中',
+                    pending: '排队中',
+                    failed: '失败'
+                  };
+
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setTaskFilter(tab)}
+                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-medium transition ${
+                        taskFilter === tab
+                          ? 'bg-blue-600/30 text-blue-400 border border-blue-500/50'
+                          : 'bg-slate-800/40 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {labels[tab]} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 任务明细卡片列表 */}
+            <div className="flex-1 overflow-y-auto py-3 space-y-2.5 pr-1">
+              {(analysisProgress?.tasks || [])
+                .filter(t => taskFilter === 'all' || t.status === taskFilter)
+                .map((task) => (
+                  <div
+                    key={task.bookmark_id}
+                    className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition text-xs space-y-1.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {task.status === 'completed' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800 text-emerald-400 shrink-0 font-medium">
+                              <CheckCircle className="w-2.5 h-2.5" /> 已完成
+                            </span>
+                          )}
+                          {task.status === 'processing' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800 text-blue-400 shrink-0 font-medium animate-pulse">
+                              <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 分析中...
+                            </span>
+                          )}
+                          {task.status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-400 shrink-0 font-medium">
+                              <Clock className="w-2.5 h-2.5" /> 排队中
+                            </span>
+                          )}
+                          {task.status === 'failed' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-red-950/60 border border-red-800 text-red-400 shrink-0 font-medium">
+                              <AlertCircle className="w-2.5 h-2.5" /> 失败
+                            </span>
+                          )}
+                          <h4 className="font-semibold text-slate-100 truncate">{task.title || task.url}</h4>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{task.url}</p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          const bm = bookmarks.find(b => b.id === task.bookmark_id);
+                          if (bm) setSelectedBookmark(bm);
+                          setIsProgressModalOpen(false);
+                        }}
+                        className="text-[11px] text-blue-400 hover:text-blue-300 transition shrink-0 underline"
+                      >
+                        在列表查看
+                      </button>
+                    </div>
+
+                    {/* AI 结果预览 */}
+                    {task.summary && (
+                      <div className="p-2 rounded-lg bg-blue-950/30 border border-blue-900/40 text-[11px] text-blue-200/90 leading-relaxed">
+                        <div className="flex items-center gap-1 text-blue-400 font-semibold mb-0.5">
+                          <Sparkles className="w-3 h-3" />
+                          <span>AI 摘要</span>
+                        </div>
+                        {task.summary}
+                      </div>
+                    )}
+
+                    {/* 智能标签 */}
+                    {task.tags && task.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {task.tags.map((t, idx) => (
+                          <span key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/60">
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 错误提示 */}
+                    {task.error && (
+                      <p className="text-[11px] text-red-400/90 font-mono bg-red-950/30 p-1.5 rounded border border-red-900/40">
+                        错误: {task.error}
+                      </p>
+                    )}
+                  </div>
+                ))}
+
+              {(!analysisProgress?.tasks || analysisProgress.tasks.length === 0) && (
+                <div className="text-center py-12 text-slate-500 text-xs">
+                  暂无正在进行的 AI 批量分析任务。点击右上角「启动/继续分析」或导入书签触发分析。
+                </div>
+              )}
+            </div>
+
+            {/* 弹窗底部 */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs shrink-0">
+              <span className="text-[11px] text-slate-400 font-mono">
+                已成功: {analysisProgress?.success || 0} | 失败: {analysisProgress?.failed || 0} | 队列总数: {analysisProgress?.total || 0}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsProgressModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition"
+              >
+                关闭
+              </button>
+            </div>
           </div>
         </div>
       )}

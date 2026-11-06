@@ -24,6 +24,9 @@ type App struct {
 	isAnalyzing       bool
 	analysisTotal     int
 	analysisProcessed int
+	analysisSuccess   int
+	analysisFailed    int
+	analysisTasks     []*models.AnalysisTaskItem
 }
 
 // NewApp creates a new App application struct
@@ -279,7 +282,10 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 		prog := &models.AnalysisProgress{
 			Total:     a.analysisTotal,
 			Processed: a.analysisProcessed,
+			Success:   a.analysisSuccess,
+			Failed:    a.analysisFailed,
 			IsRunning: true,
+			Tasks:     a.analysisTasks,
 		}
 		a.analysisMu.Unlock()
 		return prog, nil
@@ -303,9 +309,23 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 		return &models.AnalysisProgress{IsRunning: false}, nil
 	}
 
+	// Initialize task tracking
+	tasks := make([]*models.AnalysisTaskItem, len(unanalyzed))
+	for i, bm := range unanalyzed {
+		tasks[i] = &models.AnalysisTaskItem{
+			BookmarkID: bm.ID,
+			Title:      bm.Title,
+			URL:        bm.URL,
+			Status:     "pending",
+		}
+	}
+
 	a.analysisMu.Lock()
 	a.analysisTotal = len(unanalyzed)
 	a.analysisProcessed = 0
+	a.analysisSuccess = 0
+	a.analysisFailed = 0
+	a.analysisTasks = tasks
 	a.analysisMu.Unlock()
 
 	go func() {
@@ -317,10 +337,15 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 
 		// Concurrency worker pool: 2 workers
 		sem := make(chan struct{}, 2)
-		for _, bm := range unanalyzed {
+		for i, bm := range unanalyzed {
+			taskItem := tasks[i]
 			sem <- struct{}{}
-			go func(target *models.Bookmark) {
+			go func(target *models.Bookmark, item *models.AnalysisTaskItem) {
 				defer func() { <-sem }()
+
+				a.analysisMu.Lock()
+				item.Status = "processing"
+				a.analysisMu.Unlock()
 
 				content := target.ContentRaw
 				// If no content, try quick scrape or fallback to title
@@ -341,14 +366,23 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 				}
 
 				res, err := ai.AnalyzeContent(target.Title, content, apiKey, baseURL, model)
+				a.analysisMu.Lock()
 				if err == nil && res != nil {
 					_ = a.db.UpdateBookmarkAI(target.ID, res.Summary, res.KeyTakeaways, res.SuggestedTags)
+					item.Status = "completed"
+					item.Summary = res.Summary
+					item.Tags = res.SuggestedTags
+					a.analysisSuccess++
+				} else {
+					item.Status = "failed"
+					if err != nil {
+						item.Error = err.Error()
+					}
+					a.analysisFailed++
 				}
-
-				a.analysisMu.Lock()
 				a.analysisProcessed++
 				a.analysisMu.Unlock()
-			}(bm)
+			}(bm, taskItem)
 		}
 
 		// Wait for all workers to finish
@@ -360,17 +394,23 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 	return &models.AnalysisProgress{
 		Total:     len(unanalyzed),
 		Processed: 0,
+		Success:   0,
+		Failed:    0,
 		IsRunning: true,
+		Tasks:     tasks,
 	}, nil
 }
 
-// GetAnalysisProgress returns current background AI analysis status.
+// GetAnalysisProgress returns current background AI analysis status and all task results.
 func (a *App) GetAnalysisProgress() (*models.AnalysisProgress, error) {
 	a.analysisMu.Lock()
 	defer a.analysisMu.Unlock()
 	return &models.AnalysisProgress{
 		Total:     a.analysisTotal,
 		Processed: a.analysisProcessed,
+		Success:   a.analysisSuccess,
+		Failed:    a.analysisFailed,
 		IsRunning: a.isAnalyzing,
+		Tasks:     a.analysisTasks,
 	}, nil
 }

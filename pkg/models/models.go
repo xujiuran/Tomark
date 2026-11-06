@@ -70,9 +70,24 @@ type ImportResult struct {
 	Message       string `json:"message"`
 }
 
+// AnalysisTaskItem tracks a single bookmark's processing status in batch analysis.
+type AnalysisTaskItem struct {
+	BookmarkID string    `json:"bookmark_id"`
+	Title      string    `json:"title"`
+	URL        string    `json:"url"`
+	Status     string    `json:"status"` // "pending", "processing", "completed", "failed"
+	Summary    string    `json:"summary,omitempty"`
+	Tags       []string  `json:"tags,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // AnalysisProgress tracks background AI batch analysis.
 type AnalysisProgress struct {
-	Total      int  `json:"total"`
-	Processed  int  `json:"processed"`
-	IsRunning  bool `json:"is_running"`
+	Total      int                 `json:"total"`
+	Processed  int                 `json:"processed"`
+	Success    int                 `json:"success"`
+	Failed     int                 `json:"failed"`
+	IsRunning  bool                `json:"is_running"`
+	Tasks      []*AnalysisTaskItem `json:"tasks,omitempty"`
 }
