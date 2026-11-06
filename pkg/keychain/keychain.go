@@ -6,7 +6,7 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
-const ServiceName = "LinkitAI"
+const ServiceName = "TomarkAI"
 
 // SaveAPIKey stores the AI API key in the OS Keychain / Credential Manager.
 func SaveAPIKey(key string) error {

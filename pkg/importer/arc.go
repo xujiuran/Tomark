@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"linkit/pkg/models"
+	"tomark/pkg/models"
 )
 
 // ArcItemData represents the data payload of an Arc item.

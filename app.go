@@ -11,12 +11,12 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"linkit/pkg/ai"
-	"linkit/pkg/db"
-	"linkit/pkg/importer"
-	"linkit/pkg/keychain"
-	"linkit/pkg/models"
-	"linkit/pkg/scraper"
+	"tomark/pkg/ai"
+	"tomark/pkg/db"
+	"tomark/pkg/importer"
+	"tomark/pkg/keychain"
+	"tomark/pkg/models"
+	"tomark/pkg/scraper"
 )
 
 // App struct

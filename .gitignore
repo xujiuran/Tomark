@@ -20,6 +20,7 @@ dist/
 *.db-journal
 *.sqlite
 .linkit/
+.tomark/
 
 # IDE & OS
 .DS_Store

@@ -13,8 +13,8 @@ import (
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 
-	"linkit/pkg/domain"
-	"linkit/pkg/models"
+	"tomark/pkg/domain"
+	"tomark/pkg/models"
 )
 
 type DB struct {
@@ -34,7 +34,7 @@ func GetInstance() (*DB, error) {
 	if err != nil {
 		homeDir = "."
 	}
-	appDir := filepath.Join(homeDir, ".linkit")
+	appDir := filepath.Join(homeDir, ".tomark")
 	if err := os.MkdirAll(appDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}

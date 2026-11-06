@@ -80,21 +80,21 @@ export default function App() {
 
   // Resizable sidebar width
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const saved = localStorage.getItem('linkit_sidebar_width');
+    const saved = localStorage.getItem('tomark_sidebar_width') || localStorage.getItem('linkit_sidebar_width');
     return saved ? Math.min(480, Math.max(180, parseInt(saved, 10))) : 240;
   });
   const isResizingSidebar = useRef(false);
 
   // Resizable right detail panel width
   const [detailWidth, setDetailWidth] = useState<number>(() => {
-    const saved = localStorage.getItem('linkit_detail_width');
+    const saved = localStorage.getItem('tomark_detail_width') || localStorage.getItem('linkit_detail_width');
     return saved ? Math.min(650, Math.max(260, parseInt(saved, 10))) : 380;
   });
   const isResizingDetail = useRef(false);
 
   // Resizable tags section height
   const [tagsHeight, setTagsHeight] = useState<number>(() => {
-    const saved = localStorage.getItem('linkit_tags_height');
+    const saved = localStorage.getItem('tomark_tags_height') || localStorage.getItem('linkit_tags_height');
     return saved ? Math.min(450, Math.max(80, parseInt(saved, 10))) : 160;
   });
   const isResizingTags = useRef(false);
@@ -563,7 +563,7 @@ export default function App() {
       if (!isResizingSidebar.current) return;
       const newWidth = Math.min(480, Math.max(180, moveEvent.clientX));
       setSidebarWidth(newWidth);
-      localStorage.setItem('linkit_sidebar_width', String(newWidth));
+      localStorage.setItem('tomark_sidebar_width', String(newWidth));
     };
 
     const onMouseUp = () => {
@@ -589,7 +589,7 @@ export default function App() {
       if (!isResizingDetail.current) return;
       const newWidth = Math.min(650, Math.max(260, window.innerWidth - moveEvent.clientX));
       setDetailWidth(newWidth);
-      localStorage.setItem('linkit_detail_width', String(newWidth));
+      localStorage.setItem('tomark_detail_width', String(newWidth));
     };
 
     const onMouseUp = () => {
@@ -619,7 +619,7 @@ export default function App() {
       const delta = startY - moveEvent.clientY;
       const newHeight = Math.min(450, Math.max(80, startHeight + delta));
       setTagsHeight(newHeight);
-      localStorage.setItem('linkit_tags_height', String(newHeight));
+      localStorage.setItem('tomark_tags_height', String(newHeight));
     };
 
     const onMouseUp = () => {
@@ -767,9 +767,9 @@ export default function App() {
             <QuantumLogoIcon size={18} glow={true} />
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-indigo-200 to-cyan-300">Linkit</span>
+            <span className="font-bold text-sm tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-indigo-200 to-cyan-300">Tomark</span>
             <span className="text-slate-600 text-xs hidden sm:inline">/</span>
-            <span className="text-xs text-slate-400 font-medium hidden sm:inline">Quantum Taxonomy</span>
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">收藏不吃灰</span>
           </div>
         </div>
 
@@ -1229,7 +1229,7 @@ export default function App() {
             title="按住鼠标拖拽调整标签区与分类树的垂直高度比例（双击复位默认 160px）"
             onDoubleClick={() => {
               setTagsHeight(160);
-              localStorage.setItem('linkit_tags_height', '160');
+              localStorage.setItem('tomark_tags_height', '160');
             }}
           >
             <div className="h-0.5 w-8 bg-slate-700/60 group-hover:bg-cyan-400 group-active:bg-cyan-400 rounded-full transition" />
@@ -1308,7 +1308,7 @@ export default function App() {
           title="按住鼠标拖拽调整左侧栏宽度（双击复位默认 240px）"
           onDoubleClick={() => {
             setSidebarWidth(240);
-            localStorage.setItem('linkit_sidebar_width', '240');
+            localStorage.setItem('tomark_sidebar_width', '240');
           }}
         >
           <div className="w-0.5 h-7 bg-slate-700/60 group-hover:bg-blue-400 group-active:bg-blue-400 rounded-full transition" />
@@ -1692,7 +1692,7 @@ export default function App() {
           title="按住鼠标拖拽调整右侧栏宽度（双击复位默认 380px）"
           onDoubleClick={() => {
             setDetailWidth(380);
-            localStorage.setItem('linkit_detail_width', '380');
+            localStorage.setItem('tomark_detail_width', '380');
           }}
         >
           <div className="w-0.5 h-8 bg-slate-700/60 group-hover:bg-blue-400 group-active:bg-blue-400 rounded-full transition" />

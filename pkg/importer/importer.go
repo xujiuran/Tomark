@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/net/html"
 
-	"linkit/pkg/models"
+	"tomark/pkg/models"
 )
 
 type ParsedBookmark struct {

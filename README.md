@@ -1,7 +1,7 @@
-# Linkit — AI-Powered Desktop Bookmark & PKM Manager
+# Tomark — 收藏不吃灰 (AI-Powered Desktop Bookmark & PKM Manager)
 
 <p align="center">
-  <b>Local-first, offline-capable personal knowledge management and AI-curated bookmark manager.</b>
+  <b>收藏不吃灰 · 本地优先、具备 AI 智能洞察的现代化个人知识与书签管理器</b>
 </p>
 
 ---
@@ -60,7 +60,7 @@ wails build -clean -nsis
 ## 📂 Project Structure
 
 ```
-linkit/
+tomark/
 ├── app.go                 # Wails IPC methods exposed to frontend
 ├── main.go                # Native application window configuration
 ├── pkg/

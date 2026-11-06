@@ -12,7 +12,7 @@ import (
 	readability "github.com/go-shiori/go-readability"
 	"golang.org/x/net/html"
 
-	"linkit/pkg/models"
+	"tomark/pkg/models"
 )
 
 var defaultClient = &http.Client{

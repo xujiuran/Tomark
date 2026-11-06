@@ -448,7 +448,7 @@ export const ALL_TECH_ICONS_SHOWCASE = [
   {
     group: '系统级品牌徽标 (Brand & System)',
     items: [
-      { name: 'Linkit 量子晶核', en: 'Quantum Logo', icon: QuantumLogoIcon, color: '#38bdf8', desc: '六角双棱镜聚合知识核' },
+      { name: 'Tomark 量子晶核', en: 'Quantum Logo', icon: QuantumLogoIcon, color: '#38bdf8', desc: '六角双棱镜聚合知识核' },
       { name: '默认科技目录', en: 'Tech Folder', icon: DefaultFolderTechIcon, color: '#94a3b8', desc: '带全息卡槽的通用收纳夹' },
     ]
   }

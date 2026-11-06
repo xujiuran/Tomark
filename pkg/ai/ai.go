@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"linkit/pkg/models"
+	"tomark/pkg/models"
 )
 
 var httpClient = &http.Client{

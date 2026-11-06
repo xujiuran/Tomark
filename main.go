@@ -18,7 +18,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "Linkit — AI Bookmark & Knowledge Manager",
+		Title:     "Tomark — 收藏不吃灰",
 		Width:     1200,
 		Height:    800,
 		MinWidth:  960,
