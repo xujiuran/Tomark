@@ -62,3 +62,17 @@ type AIConfig struct {
 	Model   string `json:"model"`
 	APIKey  string `json:"api_key,omitempty"`
 }
+
+// ImportResult describes the outcome of a bookmark import.
+type ImportResult struct {
+	TotalImported int    `json:"total_imported"`
+	Duplicates    int    `json:"duplicates"`
+	Message       string `json:"message"`
+}
+
+// AnalysisProgress tracks background AI batch analysis.
+type AnalysisProgress struct {
+	Total      int  `json:"total"`
+	Processed  int  `json:"processed"`
+	IsRunning  bool `json:"is_running"`
+}

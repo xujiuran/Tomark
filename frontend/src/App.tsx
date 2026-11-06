@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   Bookmark as BookmarkIcon, Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
-  CheckCircle, Globe, RefreshCw, X, BookOpen, Layers
+  CheckCircle, Globe, RefreshCw, X, BookOpen, Layers, FileUp
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
   ToggleArchive, AnalyzeBookmark, GetTags, GetStats, 
-  SaveAIConfig, GetAIConfig 
+  SaveAIConfig, GetAIConfig, SelectAndImportBookmarks, 
+  StartBatchAIAnalysis, GetAnalysisProgress
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
 
@@ -28,12 +29,50 @@ export default function App() {
   const [newUrl, setNewUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  
+  const [isImporting, setIsImporting] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<models.AnalysisProgress | null>(null);
+
   // Settings form
   const [aiBaseURL, setAiBaseURL] = useState('http://127.0.0.1:3425/v1');
   const [aiModel, setAiModel] = useState('auto/deepseek-v4.1-flash');
   const [aiApiKey, setAiApiKey] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Periodically check analysis progress if running
+  useEffect(() => {
+    let timer: any;
+    const checkProgress = async () => {
+      try {
+        const prog = await GetAnalysisProgress();
+        setAnalysisProgress(prog);
+        if (prog && prog.is_running) {
+          await loadData();
+          timer = setTimeout(checkProgress, 2500);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    checkProgress();
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleImport = async () => {
+    setIsImporting(true);
+    try {
+      const res = await SelectAndImportBookmarks();
+      if (res && res.total_imported > 0) {
+        alert(`🎉 ${res.message}\n已加入后台并发队列，本地 Magpie (DeepSeek) 正在持续深度分析中...`);
+        await loadData();
+        const prog = await GetAnalysisProgress();
+        setAnalysisProgress(prog);
+      }
+    } catch (err: any) {
+      alert("导入失败: " + err);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   // Load initial data
   const loadData = async () => {
@@ -171,9 +210,16 @@ export default function App() {
           </div>
         </div>
 
-        {/* 右侧：全局搜索框 + 添加按钮 + 设置 */}
+        {/* 右侧：全局搜索框 + 导入/添加按钮 + 状态 + 设置 */}
         <div className="flex items-center gap-2.5" style={{ '--wails-draggable': 'no-drag' } as any}>
-          <div className="relative w-64 md:w-72">
+          {analysisProgress?.is_running && (
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-900/40 border border-blue-500/40 text-[11px] text-blue-300">
+              <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+              <span>AI 批量分析中 ({analysisProgress.processed}/{analysisProgress.total})</span>
+            </div>
+          )}
+
+          <div className="relative w-56 md:w-64">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -183,6 +229,16 @@ export default function App() {
               className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition"
             />
           </div>
+
+          <button
+            onClick={handleImport}
+            disabled={isImporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700/80 text-xs font-medium shadow-sm transition shrink-0 disabled:opacity-50"
+            title="导入从 Chrome/Edge 等浏览器导出的 HTML 书签文件"
+          >
+            <FileUp className="w-3.5 h-3.5 text-blue-400" />
+            <span>{isImporting ? '正在解析...' : '导入书签'}</span>
+          </button>
 
           <button
             onClick={() => setIsAddModalOpen(true)}

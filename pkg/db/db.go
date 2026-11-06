@@ -160,6 +160,132 @@ func (d *DB) CreateBookmark(b *models.Bookmark, tags []string) (*models.Bookmark
 	return b, nil
 }
 
+// BatchCreateBookmarks inserts multiple bookmarks in a single transaction.
+func (d *DB) BatchCreateBookmarks(items []*models.Bookmark) (*models.ImportResult, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO bookmarks (
+			id, url, title, description, favicon_url, cover_image,
+			content_raw, ai_summary, ai_key_points, status_code,
+			is_archived, is_favorite, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(url) DO UPDATE SET
+			title=excluded.title,
+			favicon_url=CASE WHEN bookmarks.favicon_url='' THEN excluded.favicon_url ELSE bookmarks.favicon_url END,
+			updated_at=CURRENT_TIMESTAMP;
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	tagStmt, err := tx.Prepare("INSERT OR IGNORE INTO tags (id, name) VALUES (?, ?)")
+	if err != nil {
+		return nil, err
+	}
+	defer tagStmt.Close()
+
+	btStmt, err := tx.Prepare("INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, (SELECT id FROM tags WHERE name = ?))")
+	if err != nil {
+		return nil, err
+	}
+	defer btStmt.Close()
+
+	imported := 0
+	now := time.Now()
+	for _, b := range items {
+		if b.ID == "" {
+			b.ID = uuid.NewString()
+		}
+		isArch := 0
+		if b.IsArchived {
+			isArch = 1
+		}
+		isFav := 0
+		if b.IsFavorite {
+			isFav = 1
+		}
+
+		keyPointsJSON, _ := json.Marshal(b.AIKeyPoints)
+		_, err := stmt.Exec(
+			b.ID, b.URL, b.Title, b.Description, b.FaviconURL, b.CoverImage,
+			b.ContentRaw, b.AISummary, string(keyPointsJSON), b.StatusCode,
+			isArch, isFav, now, now,
+		)
+		if err != nil {
+			continue
+		}
+		imported++
+
+		// Associate tags
+		for _, tagName := range b.Tags {
+			tagName = strings.TrimSpace(strings.ToLower(tagName))
+			if tagName == "" {
+				continue
+			}
+			tagID := uuid.NewString()
+			_, _ = tagStmt.Exec(tagID, tagName)
+			_, _ = btStmt.Exec(b.ID, tagName)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &models.ImportResult{
+		TotalImported: imported,
+		Duplicates:    len(items) - imported,
+	}, nil
+}
+
+// GetUnanalyzedBookmarks retrieves bookmarks that haven't been summarized by AI.
+func (d *DB) GetUnanalyzedBookmarks(limit int) ([]*models.Bookmark, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	query := `
+	SELECT id, url, title, description, favicon_url, cover_image,
+	       content_raw, ai_summary, ai_key_points, status_code,
+	       is_archived, is_favorite, created_at, updated_at
+	FROM bookmarks
+	WHERE (ai_summary IS NULL OR ai_summary = '') AND is_archived = 0
+	ORDER BY created_at DESC
+	LIMIT ?;
+	`
+	rows, err := d.conn.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*models.Bookmark
+	for rows.Next() {
+		var b models.Bookmark
+		var kpStr string
+		var isArch, isFav int
+		if err := rows.Scan(
+			&b.ID, &b.URL, &b.Title, &b.Description, &b.FaviconURL, &b.CoverImage,
+			&b.ContentRaw, &b.AISummary, &kpStr, &b.StatusCode,
+			&isArch, &isFav, &b.CreatedAt, &b.UpdatedAt,
+		); err != nil {
+			continue
+		}
+		b.IsArchived = (isArch == 1)
+		b.IsFavorite = (isFav == 1)
+		list = append(list, &b)
+	}
+	return list, nil
+}
+
 // GetBookmarks fetches bookmarks according to search filters.
 func (d *DB) GetBookmarks(search, tagName string, favoriteOnly, archivedOnly bool) ([]*models.Bookmark, error) {
 	d.mu.RLock()

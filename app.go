@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"linkit/pkg/ai"
 	"linkit/pkg/db"
+	"linkit/pkg/importer"
 	"linkit/pkg/keychain"
 	"linkit/pkg/models"
 	"linkit/pkg/scraper"
@@ -14,8 +18,12 @@ import (
 
 // App struct
 type App struct {
-	ctx context.Context
-	db  *db.DB
+	ctx               context.Context
+	db                *db.DB
+	analysisMu        sync.Mutex
+	isAnalyzing       bool
+	analysisTotal     int
+	analysisProcessed int
 }
 
 // NewApp creates a new App application struct
@@ -214,5 +222,155 @@ func (a *App) GetAIConfig() (*models.AIConfig, error) {
 		BaseURL: a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1"),
 		Model:   a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash"),
 		APIKey:  hasKey,
+	}, nil
+}
+
+// SelectAndImportBookmarks opens a native macOS file dialog to pick an HTML file.
+func (a *App) SelectAndImportBookmarks() (*models.ImportResult, error) {
+	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择浏览器导出的书签 HTML 文件",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "HTML Bookmarks (*.html)",
+				Pattern:     "*.html;*.htm",
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file dialog: %w", err)
+	}
+	if filePath == "" {
+		return nil, nil // user cancelled
+	}
+	return a.ImportBookmarkFile(filePath)
+}
+
+// ImportBookmarkFile parses an HTML file and saves all bookmarks.
+func (a *App) ImportBookmarkFile(filePath string) (*models.ImportResult, error) {
+	parsed, err := importer.ParseBookmarkFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse bookmarks file: %w", err)
+	}
+	if len(parsed) == 0 {
+		return &models.ImportResult{Message: "未在文件中找到有效书签"}, nil
+	}
+
+	bookmarks := make([]*models.Bookmark, len(parsed))
+	for i, p := range parsed {
+		bookmarks[i] = p.Bookmark
+	}
+
+	res, err := a.db.BatchCreateBookmarks(bookmarks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save bookmarks: %w", err)
+	}
+	res.Message = fmt.Sprintf("成功导入 %d 个书签！", res.TotalImported)
+
+	// Automatically start background AI analysis
+	go a.StartBatchAIAnalysis()
+
+	return res, nil
+}
+
+// StartBatchAIAnalysis processes unanalyzed bookmarks in the background with local Magpie.
+func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
+	a.analysisMu.Lock()
+	if a.isAnalyzing {
+		prog := &models.AnalysisProgress{
+			Total:     a.analysisTotal,
+			Processed: a.analysisProcessed,
+			IsRunning: true,
+		}
+		a.analysisMu.Unlock()
+		return prog, nil
+	}
+	a.isAnalyzing = true
+	a.analysisMu.Unlock()
+
+	baseURL := a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1")
+	model := a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash")
+	apiKey, _ := keychain.GetAPIKey()
+	isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
+	if isLocal && apiKey == "" {
+		apiKey = "magpie"
+	}
+
+	unanalyzed, err := a.db.GetUnanalyzedBookmarks(500)
+	if err != nil || len(unanalyzed) == 0 {
+		a.analysisMu.Lock()
+		a.isAnalyzing = false
+		a.analysisMu.Unlock()
+		return &models.AnalysisProgress{IsRunning: false}, nil
+	}
+
+	a.analysisMu.Lock()
+	a.analysisTotal = len(unanalyzed)
+	a.analysisProcessed = 0
+	a.analysisMu.Unlock()
+
+	go func() {
+		defer func() {
+			a.analysisMu.Lock()
+			a.isAnalyzing = false
+			a.analysisMu.Unlock()
+		}()
+
+		// Concurrency worker pool: 2 workers
+		sem := make(chan struct{}, 2)
+		for _, bm := range unanalyzed {
+			sem <- struct{}{}
+			go func(target *models.Bookmark) {
+				defer func() { <-sem }()
+
+				content := target.ContentRaw
+				// If no content, try quick scrape or fallback to title
+				if content == "" {
+					page, err := scraper.FetchPage(target.URL)
+					if err == nil && page != nil {
+						content = page.ContentText
+						if target.FaviconURL == "" && page.FaviconURL != "" {
+							target.FaviconURL = page.FaviconURL
+						}
+						if target.Description == "" && page.Description != "" {
+							target.Description = page.Description
+						}
+					}
+				}
+				if content == "" {
+					content = target.Title
+				}
+
+				res, err := ai.AnalyzeContent(target.Title, content, apiKey, baseURL, model)
+				if err == nil && res != nil {
+					_ = a.db.UpdateBookmarkAI(target.ID, res.Summary, res.KeyTakeaways, res.SuggestedTags)
+				}
+
+				a.analysisMu.Lock()
+				a.analysisProcessed++
+				a.analysisMu.Unlock()
+			}(bm)
+		}
+
+		// Wait for all workers to finish
+		for i := 0; i < cap(sem); i++ {
+			sem <- struct{}{}
+		}
+	}()
+
+	return &models.AnalysisProgress{
+		Total:     len(unanalyzed),
+		Processed: 0,
+		IsRunning: true,
+	}, nil
+}
+
+// GetAnalysisProgress returns current background AI analysis status.
+func (a *App) GetAnalysisProgress() (*models.AnalysisProgress, error) {
+	a.analysisMu.Lock()
+	defer a.analysisMu.Unlock()
+	return &models.AnalysisProgress{
+		Total:     a.analysisTotal,
+		Processed: a.analysisProcessed,
+		IsRunning: a.isAnalyzing,
 	}, nil
 }

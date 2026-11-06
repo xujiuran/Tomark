@@ -34,6 +34,22 @@ export namespace models {
 	        this.category = source["category"];
 	    }
 	}
+	export class AnalysisProgress {
+	    total: number;
+	    processed: number;
+	    is_running: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnalysisProgress(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.processed = source["processed"];
+	        this.is_running = source["is_running"];
+	    }
+	}
 	export class Bookmark {
 	    id: string;
 	    url: string;
@@ -93,6 +109,22 @@ export namespace models {
 		    }
 		    return a;
 		}
+	}
+	export class ImportResult {
+	    total_imported: number;
+	    duplicates: number;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total_imported = source["total_imported"];
+	        this.duplicates = source["duplicates"];
+	        this.message = source["message"];
+	    }
 	}
 	export class Stats {
 	    total_bookmarks: number;

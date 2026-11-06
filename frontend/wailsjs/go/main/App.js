@@ -18,6 +18,10 @@ export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
 }
 
+export function GetAnalysisProgress() {
+  return window['go']['main']['App']['GetAnalysisProgress']();
+}
+
 export function GetBookmark(arg1) {
   return window['go']['main']['App']['GetBookmark'](arg1);
 }
@@ -34,8 +38,20 @@ export function GetTags() {
   return window['go']['main']['App']['GetTags']();
 }
 
+export function ImportBookmarkFile(arg1) {
+  return window['go']['main']['App']['ImportBookmarkFile'](arg1);
+}
+
 export function SaveAIConfig(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveAIConfig'](arg1, arg2, arg3);
+}
+
+export function SelectAndImportBookmarks() {
+  return window['go']['main']['App']['SelectAndImportBookmarks']();
+}
+
+export function StartBatchAIAnalysis() {
+  return window['go']['main']['App']['StartBatchAIAnalysis']();
 }
 
 export function ToggleArchive(arg1) {
