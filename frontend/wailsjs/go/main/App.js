@@ -10,6 +10,30 @@ export function AnalyzeBookmark(arg1) {
   return window['go']['main']['App']['AnalyzeBookmark'](arg1);
 }
 
+export function BatchAddTags(arg1, arg2) {
+  return window['go']['main']['App']['BatchAddTags'](arg1, arg2);
+}
+
+export function BatchDeleteBookmarks(arg1) {
+  return window['go']['main']['App']['BatchDeleteBookmarks'](arg1);
+}
+
+export function BatchRemoveTag(arg1, arg2) {
+  return window['go']['main']['App']['BatchRemoveTag'](arg1, arg2);
+}
+
+export function BatchToggleArchive(arg1, arg2) {
+  return window['go']['main']['App']['BatchToggleArchive'](arg1, arg2);
+}
+
+export function BatchToggleFavorite(arg1, arg2) {
+  return window['go']['main']['App']['BatchToggleFavorite'](arg1, arg2);
+}
+
+export function BatchUpdateCategory(arg1, arg2, arg3) {
+  return window['go']['main']['App']['BatchUpdateCategory'](arg1, arg2, arg3);
+}
+
 export function CreateCategory(arg1) {
   return window['go']['main']['App']['CreateCategory'](arg1);
 }

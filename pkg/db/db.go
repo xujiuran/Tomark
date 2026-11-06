@@ -1102,3 +1102,241 @@ func (d *DB) SetSetting(key, val string) error {
 	_, err := d.conn.Exec("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, val)
 	return err
 }
+
+// BatchUpdateCategory updates category (and optionally sub_category) for multiple bookmarks.
+func (d *DB) BatchUpdateCategory(ids []string, category, subCategory string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if len(ids) == 0 {
+		return nil
+	}
+	category = strings.TrimSpace(category)
+	subCategory = strings.TrimSpace(subCategory)
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("UPDATE bookmarks SET category = ?, sub_category = CASE WHEN ? != '' THEN ? ELSE sub_category END, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, err := stmt.Exec(category, subCategory, subCategory, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// BatchAddTags adds tags to multiple bookmarks without deleting existing ones.
+func (d *DB) BatchAddTags(ids []string, newTags []string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if len(ids) == 0 || len(newTags) == 0 {
+		return nil
+	}
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var tagIDs []string
+	for _, tName := range newTags {
+		tName = strings.TrimSpace(tName)
+		if tName == "" {
+			continue
+		}
+		var tagID string
+		err := tx.QueryRow("SELECT id FROM tags WHERE name = ?", tName).Scan(&tagID)
+		if err != nil {
+			tagID = uuid.New().String()
+			if _, err := tx.Exec("INSERT INTO tags (id, name) VALUES (?, ?)", tagID, tName); err != nil {
+				return err
+			}
+		}
+		tagIDs = append(tagIDs, tagID)
+	}
+
+	stmt, err := tx.Prepare("INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		for _, tagID := range tagIDs {
+			if _, err := stmt.Exec(id, tagID); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// BatchRemoveTag removes a specific tag from multiple bookmarks.
+func (d *DB) BatchRemoveTag(ids []string, tagName string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if len(ids) == 0 || strings.TrimSpace(tagName) == "" {
+		return nil
+	}
+
+	var tagID string
+	err := d.conn.QueryRow("SELECT id FROM tags WHERE name = ?", strings.TrimSpace(tagName)).Scan(&tagID)
+	if err != nil {
+		return nil
+	}
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("DELETE FROM bookmark_tags WHERE bookmark_id = ? AND tag_id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			if _, err := stmt.Exec(id, tagID); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// BatchToggleArchive updates archived state for multiple bookmarks.
+func (d *DB) BatchToggleArchive(ids []string, archive bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if len(ids) == 0 {
+		return nil
+	}
+	val := 0
+	if archive {
+		val = 1
+	}
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("UPDATE bookmarks SET is_archived = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			if _, err := stmt.Exec(val, id); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// BatchToggleFavorite updates favorite state for multiple bookmarks.
+func (d *DB) BatchToggleFavorite(ids []string, favorite bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if len(ids) == 0 {
+		return nil
+	}
+	val := 0
+	if favorite {
+		val = 1
+	}
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("UPDATE bookmarks SET is_favorite = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			if _, err := stmt.Exec(val, id); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// BatchDeleteBookmarks deletes multiple bookmarks and their associated tags.
+func (d *DB) BatchDeleteBookmarks(ids []string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if len(ids) == 0 {
+		return nil
+	}
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt1, err := tx.Prepare("DELETE FROM bookmark_tags WHERE bookmark_id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt1.Close()
+
+	stmt2, err := tx.Prepare("DELETE FROM bookmarks WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt2.Close()
+
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			if _, err := stmt1.Exec(id); err != nil {
+				return err
+			}
+			if _, err := stmt2.Exec(id); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}

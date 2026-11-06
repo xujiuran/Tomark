@@ -6,6 +6,18 @@ export function AddBookmark(arg1:string):Promise<models.Bookmark>;
 
 export function AnalyzeBookmark(arg1:string):Promise<models.AISummaryResult>;
 
+export function BatchAddTags(arg1:Array<string>,arg2:Array<string>):Promise<void>;
+
+export function BatchDeleteBookmarks(arg1:Array<string>):Promise<void>;
+
+export function BatchRemoveTag(arg1:Array<string>,arg2:string):Promise<void>;
+
+export function BatchToggleArchive(arg1:Array<string>,arg2:boolean):Promise<void>;
+
+export function BatchToggleFavorite(arg1:Array<string>,arg2:boolean):Promise<void>;
+
+export function BatchUpdateCategory(arg1:Array<string>,arg2:string,arg3:string):Promise<void>;
+
 export function CreateCategory(arg1:string):Promise<void>;
 
 export function DeleteBookmark(arg1:string):Promise<void>;

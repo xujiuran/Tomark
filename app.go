@@ -623,3 +623,51 @@ func (a *App) UpdateBookmarkTags(bookmarkID string, tags []string) error {
 	}
 	return a.db.UpdateBookmarkTags(bookmarkID, tags)
 }
+
+// BatchUpdateCategory updates category and sub_category for multiple bookmarks.
+func (a *App) BatchUpdateCategory(ids []string, category, subCategory string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.BatchUpdateCategory(ids, category, subCategory)
+}
+
+// BatchAddTags adds tags to multiple bookmarks.
+func (a *App) BatchAddTags(ids []string, tags []string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.BatchAddTags(ids, tags)
+}
+
+// BatchRemoveTag removes a specific tag from multiple bookmarks.
+func (a *App) BatchRemoveTag(ids []string, tagName string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.BatchRemoveTag(ids, tagName)
+}
+
+// BatchToggleArchive updates archived status for multiple bookmarks.
+func (a *App) BatchToggleArchive(ids []string, archive bool) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.BatchToggleArchive(ids, archive)
+}
+
+// BatchToggleFavorite updates favorite status for multiple bookmarks.
+func (a *App) BatchToggleFavorite(ids []string, favorite bool) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.BatchToggleFavorite(ids, favorite)
+}
+
+// BatchDeleteBookmarks deletes multiple bookmarks.
+func (a *App) BatchDeleteBookmarks(ids []string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.BatchDeleteBookmarks(ids)
+}

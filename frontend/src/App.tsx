@@ -5,7 +5,7 @@ import {
   CheckCircle, Globe, RefreshCw, X, FolderTree, ChevronDown, ChevronRight,
   Edit3, Check, Loader2, ArrowRight, MoreVertical, LayoutGrid, Palette, Layers,
   FileText, CornerDownRight, FolderPlus, FileUp, Compass, Bookmark as BookmarkIcon,
-  Clock, AlertCircle
+  Clock, AlertCircle, CheckSquare, Square, CheckCheck, ListTodo, FolderInput, Tags
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
@@ -15,7 +15,8 @@ import {
   HasArcBrowser, ImportFromArc, ExportArcBookmarks,
   CreateCategory, RenameCategory, MergeCategories, DeleteCategory,
   MoveSubCategory, RenameSubCategory, DeleteSubCategory,
-  UpdateBookmarkCategory, UpdateBookmarkTags
+  UpdateBookmarkCategory, UpdateBookmarkTags,
+  BatchUpdateCategory, BatchAddTags, BatchRemoveTag, BatchToggleArchive, BatchToggleFavorite, BatchDeleteBookmarks
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
 import { 
@@ -62,6 +63,18 @@ export default function App() {
   const [newTagInput, setNewTagInput] = useState('');
   const [isEditingCategory, setIsEditingCategory] = useState(false);
   const [detailSubCatInput, setDetailSubCatInput] = useState('');
+
+  // Batch management mode
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<Set<string>>(new Set());
+  const [lastSelectedIdx, setLastSelectedIdx] = useState<number | null>(null);
+  const [isBatchActionLoading, setIsBatchActionLoading] = useState(false);
+  const [batchModal, setBatchModal] = useState<{
+    type: 'category' | 'tags' | 'delete' | null;
+    targetCategory?: string;
+    subCategory?: string;
+    newTagInput?: string;
+  }>({ type: null });
 
   // Navigation & filters
   const [currentTab, setCurrentTab] = useState<'all' | 'favorites' | 'archived'>('all');
@@ -361,6 +374,132 @@ export default function App() {
       setTags(t || []);
     } catch (err: any) {
       alert("添加标签失败: " + err);
+    }
+  };
+
+  // Batch Management Handlers
+  const handleToggleSelect = (id: string, index: number, isShiftKey: boolean = false) => {
+    const next = new Set(selectedBookmarkIds);
+    if (isShiftKey && lastSelectedIdx !== null && lastSelectedIdx !== index) {
+      const start = Math.min(lastSelectedIdx, index);
+      const end = Math.max(lastSelectedIdx, index);
+      const shouldSelect = !selectedBookmarkIds.has(id);
+      for (let i = start; i <= end; i++) {
+        if (bookmarks[i]) {
+          if (shouldSelect) next.add(bookmarks[i].id);
+          else next.delete(bookmarks[i].id);
+        }
+      }
+    } else {
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+    }
+    setSelectedBookmarkIds(next);
+    setLastSelectedIdx(index);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedBookmarkIds.size === bookmarks.length) {
+      setSelectedBookmarkIds(new Set());
+    } else {
+      setSelectedBookmarkIds(new Set(bookmarks.map(b => b.id)));
+    }
+  };
+
+  const handleBatchMoveCategory = async (targetCategory: string, subCategory: string = '') => {
+    if (!targetCategory || selectedBookmarkIds.size === 0) return;
+    setIsBatchActionLoading(true);
+    try {
+      const ids = Array.from(selectedBookmarkIds);
+      await BatchUpdateCategory(ids, targetCategory, subCategory);
+      setBatchModal({ type: null });
+      setSelectedBookmarkIds(new Set());
+      await loadData();
+    } catch (err: any) {
+      alert("批量移动分类失败: " + err);
+    } finally {
+      setIsBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchAddTags = async (tagsStr: string) => {
+    if (!tagsStr.trim() || selectedBookmarkIds.size === 0) return;
+    setIsBatchActionLoading(true);
+    try {
+      const ids = Array.from(selectedBookmarkIds);
+      const newTags = tagsStr.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean);
+      await BatchAddTags(ids, newTags);
+      setBatchModal({ type: null });
+      await loadData();
+    } catch (err: any) {
+      alert("批量添加标签失败: " + err);
+    } finally {
+      setIsBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchRemoveTag = async (tagName: string) => {
+    if (!tagName.trim() || selectedBookmarkIds.size === 0) return;
+    setIsBatchActionLoading(true);
+    try {
+      const ids = Array.from(selectedBookmarkIds);
+      await BatchRemoveTag(ids, tagName.trim());
+      await loadData();
+    } catch (err: any) {
+      alert("批量移除标签失败: " + err);
+    } finally {
+      setIsBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchArchive = async (archive: boolean) => {
+    if (selectedBookmarkIds.size === 0) return;
+    setIsBatchActionLoading(true);
+    try {
+      const ids = Array.from(selectedBookmarkIds);
+      await BatchToggleArchive(ids, archive);
+      setSelectedBookmarkIds(new Set());
+      await loadData();
+    } catch (err: any) {
+      alert("批量归档操作失败: " + err);
+    } finally {
+      setIsBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchFavorite = async (favorite: boolean) => {
+    if (selectedBookmarkIds.size === 0) return;
+    setIsBatchActionLoading(true);
+    try {
+      const ids = Array.from(selectedBookmarkIds);
+      await BatchToggleFavorite(ids, favorite);
+      await loadData();
+    } catch (err: any) {
+      alert("批量星标操作失败: " + err);
+    } finally {
+      setIsBatchActionLoading(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedBookmarkIds.size === 0) return;
+    setIsBatchActionLoading(true);
+    try {
+      const ids = Array.from(selectedBookmarkIds);
+      await BatchDeleteBookmarks(ids);
+      setBatchModal({ type: null });
+      setSelectedBookmarkIds(new Set());
+      if (selectedBookmark && ids.includes(selectedBookmark.id)) {
+        setSelectedBookmark(null);
+      }
+      await loadData();
+    } catch (err: any) {
+      alert("批量删除失败: " + err);
+    } finally {
+      setIsBatchActionLoading(false);
     }
   };
 
@@ -900,32 +1039,121 @@ export default function App() {
               <span className="text-slate-600 font-mono ml-1">({bookmarks.length})</span>
             </div>
 
-            {(selectedCategory || selectedDomain || selectedTag) && (
+            <div className="flex items-center gap-2 shrink-0">
+              {(selectedCategory || selectedDomain || selectedTag) && (
+                <button
+                  onClick={() => { setSelectedCategory(''); setSelectedDomain(''); setSelectedSubName(''); setSelectedTag(''); }}
+                  className="text-[11px] text-slate-500 hover:text-slate-300 flex items-center gap-1 shrink-0"
+                >
+                  <X className="w-3 h-3" />
+                  <span>重置筛选</span>
+                </button>
+              )}
+
+              {/* 批量整理模式开关 */}
               <button
-                onClick={() => { setSelectedCategory(''); setSelectedDomain(''); setSelectedSubName(''); setSelectedTag(''); }}
-                className="text-[11px] text-slate-500 hover:text-slate-300 flex items-center gap-1 shrink-0"
+                onClick={() => {
+                  const next = !isBatchMode;
+                  setIsBatchMode(next);
+                  if (!next) {
+                    setSelectedBookmarkIds(new Set());
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition flex items-center gap-1.5 border shadow-sm ${
+                  isBatchMode
+                    ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/60 shadow-cyan-950/50 font-semibold'
+                    : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 border-slate-700/60'
+                }`}
+                title="开启多选批量整理（移动分类、批量增删标签、归档或删除）"
               >
-                <X className="w-3 h-3" />
-                <span>重置筛选</span>
+                <CheckSquare className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{isBatchMode ? '退出批量' : '批量整理'}</span>
               </button>
-            )}
+            </div>
           </div>
 
+          {/* 批量模式顶栏工具栏 */}
+          {isBatchMode && (
+            <div className="px-4 py-2 bg-cyan-950/40 border-b border-cyan-800/50 flex items-center justify-between text-xs animate-in fade-in shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSelectAll}
+                  className="flex items-center gap-1.5 text-cyan-300 hover:text-cyan-200 font-medium"
+                >
+                  {selectedBookmarkIds.size === bookmarks.length && bookmarks.length > 0 ? (
+                    <CheckSquare className="w-4 h-4 text-cyan-400" />
+                  ) : (
+                    <Square className="w-4 h-4 text-cyan-400/60" />
+                  )}
+                  <span>
+                    {selectedBookmarkIds.size === bookmarks.length && bookmarks.length > 0
+                      ? '取消全选'
+                      : `全选当前筛选 (${bookmarks.length} 项)`}
+                  </span>
+                </button>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-300">
+                  已选 <strong className="text-cyan-300 font-mono">{selectedBookmarkIds.size}</strong> 项
+                </span>
+                <span className="text-[10px] text-slate-500 hidden sm:inline">
+                  (支持 Shift 连选范围)
+                </span>
+              </div>
+
+              {selectedBookmarkIds.size > 0 && (
+                <button
+                  onClick={() => setSelectedBookmarkIds(new Set())}
+                  className="text-[11px] text-slate-400 hover:text-slate-200"
+                >
+                  清空已选
+                </button>
+              )}
+            </div>
+          )}
+
           {/* 书签流 */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {bookmarks.map((bm) => {
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 relative">
+            {bookmarks.map((bm, index) => {
               const isSelected = selectedBookmark?.id === bm.id;
+              const isChecked = selectedBookmarkIds.has(bm.id);
+
               return (
                 <div
                   key={bm.id}
-                  onClick={() => setSelectedBookmark(bm)}
+                  onClick={(e) => {
+                    if (isBatchMode) {
+                      handleToggleSelect(bm.id, index, e.shiftKey);
+                    } else {
+                      setSelectedBookmark(bm);
+                    }
+                  }}
                   className={`group p-4 rounded-xl border transition cursor-pointer relative ${
-                    isSelected 
-                      ? 'bg-blue-950/20 border-blue-500/60 shadow-lg shadow-blue-950/40 ring-1 ring-blue-500/30' 
-                      : 'bg-[#121824]/60 hover:bg-[#151c2a] border-slate-800/80 hover:border-slate-700'
+                    isBatchMode && isChecked
+                      ? 'bg-cyan-950/30 border-cyan-500/60 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-500/40'
+                      : isSelected 
+                        ? 'bg-blue-950/20 border-blue-500/60 shadow-lg shadow-blue-950/40 ring-1 ring-blue-500/30' 
+                        : 'bg-[#121824]/60 hover:bg-[#151c2a] border-slate-800/80 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
+                    {/* 批量勾选框 */}
+                    {isBatchMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelect(bm.id, index, e.shiftKey);
+                        }}
+                        className="mt-0.5 p-0.5 text-cyan-400 hover:scale-110 transition shrink-0"
+                      >
+                        {isChecked ? (
+                          <CheckSquare className="w-4 h-4 text-cyan-400" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-500 hover:text-slate-300" />
+                        )}
+                      </button>
+                    )}
+
                     {/* Favicon & Title */}
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       <img 
@@ -1017,6 +1245,83 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* 浮动批量操作快捷控制舱 (Cyberpunk Action Dock) */}
+          {isBatchMode && selectedBookmarkIds.size > 0 && (
+            <div className="p-3 border-t border-slate-800/80 bg-[#0c121e]/95 backdrop-blur-xl shrink-0 flex items-center justify-between gap-3 shadow-2xl shadow-cyan-950/80 animate-in slide-in-from-bottom-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-cyan-300 shrink-0">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span>已选择 <strong className="font-mono text-cyan-200">{selectedBookmarkIds.size}</strong> 项</span>
+              </div>
+
+              {/* 动作按钮组 */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setBatchModal({ type: 'category', targetCategory: '', subCategory: '' })}
+                  disabled={isBatchActionLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/25 hover:bg-blue-600/35 text-blue-300 border border-blue-500/40 text-xs font-medium transition shadow-sm"
+                  title="批量移动到指定大类或二级站点"
+                >
+                  <FolderInput className="w-3.5 h-3.5 text-blue-400" />
+                  <span>移动分类</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBatchModal({ type: 'tags', newTagInput: '' })}
+                  disabled={isBatchActionLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/25 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/40 text-xs font-medium transition shadow-sm"
+                  title="批量增删标签"
+                >
+                  <Tags className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>打标签</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBatchFavorite(true)}
+                  disabled={isBatchActionLoading}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-amber-400 border border-slate-700/60 text-xs font-medium transition"
+                  title="批量设为星标"
+                >
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  <span>星标</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBatchArchive(true)}
+                  disabled={isBatchActionLoading}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60 text-xs font-medium transition"
+                  title="批量移入归档箱"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  <span>归档</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBatchModal({ type: 'delete' })}
+                  disabled={isBatchActionLoading}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-400 border border-red-800/50 text-xs font-medium transition"
+                  title="批量彻底删除"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>删除</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedBookmarkIds(new Set())}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition ml-1"
+                  title="清空已选"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </main>
 
         {/* 3. 右侧详情、阅读器与私人笔记面板 (Detail, Reader & Notes Panel) */}
@@ -1651,6 +1956,213 @@ export default function App() {
                   className="px-4 py-1.5 rounded-lg text-xs bg-red-600 hover:bg-red-500 text-white font-medium"
                 >
                   确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 批量移动分类弹窗 */}
+      {batchModal.type === 'category' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#131926] border border-blue-500/50 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <FolderInput className="w-4 h-4 text-blue-400" />
+                <span>批量移动分类 ({selectedBookmarkIds.size} 项)</span>
+              </h3>
+              <button onClick={() => setBatchModal({ type: null })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-slate-300">
+                将选中的 <strong className="text-cyan-300 font-mono">{selectedBookmarkIds.size}</strong> 个书签一次性移动至目标大类：
+              </p>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5 font-medium">目标一级大类</label>
+                <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                  {hierarchies.map((h) => {
+                    const isSelected = (batchModal.targetCategory || hierarchies[0]?.name) === h.name;
+                    return (
+                      <button
+                        key={h.name}
+                        type="button"
+                        onClick={() => setBatchModal(prev => ({ ...prev, targetCategory: h.name }))}
+                        className={`flex items-center gap-2 p-2 rounded-lg text-xs border text-left transition ${
+                          isSelected
+                            ? 'bg-blue-600/30 border-blue-500/60 text-blue-300 font-semibold'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                        }`}
+                      >
+                        {getCategoryTechIcon(h.name, 14, "shrink-0", isSelected)}
+                        <span className="truncate">{h.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  二级站点别名（可选，留空则保持书签原有二级站点）：
+                </label>
+                <input
+                  type="text"
+                  placeholder="如统一指定为某平台或站点别名"
+                  value={batchModal.subCategory || ''}
+                  onChange={(e) => setBatchModal(prev => ({ ...prev, subCategory: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setBatchModal({ type: null })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={isBatchActionLoading}
+                  onClick={() => handleBatchMoveCategory(batchModal.targetCategory || hierarchies[0]?.name, batchModal.subCategory || '')}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md transition disabled:opacity-50"
+                >
+                  {isBatchActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>确认批量移动</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 批量打标签弹窗 */}
+      {batchModal.type === 'tags' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#131926] border border-indigo-500/50 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <Tags className="w-4 h-4 text-indigo-400" />
+                <span>批量管理标签 ({selectedBookmarkIds.size} 项)</span>
+              </h3>
+              <button onClick={() => setBatchModal({ type: null })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-xs text-slate-300 font-medium mb-1.5">
+                  为选中的 {selectedBookmarkIds.size} 个书签统一添加新标签：
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="输入标签名，多个可用逗号或空格隔开，如: 前端, 重点, 工具"
+                    value={batchModal.newTagInput || ''}
+                    onChange={(e) => setBatchModal(prev => ({ ...prev, newTagInput: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (batchModal.newTagInput?.trim()) {
+                          handleBatchAddTags(batchModal.newTagInput);
+                        }
+                      }
+                    }}
+                    autoFocus
+                    className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (batchModal.newTagInput?.trim()) {
+                        handleBatchAddTags(batchModal.newTagInput);
+                      }
+                    }}
+                    disabled={!batchModal.newTagInput?.trim() || isBatchActionLoading}
+                    className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition disabled:opacity-50 shrink-0"
+                  >
+                    添加
+                  </button>
+                </div>
+              </div>
+
+              {tags.length > 0 && (
+                <div>
+                  <div className="text-[11px] text-slate-400 mb-1.5 font-medium">常用已有标签（点击直接追加给所选书签）：</div>
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-slate-900/60 rounded-lg border border-slate-800">
+                    {tags.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => handleBatchAddTags(t.name)}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-950/60 hover:text-indigo-300 hover:border-indigo-600/60 border border-slate-700 text-slate-300 text-[11px] transition"
+                      >
+                        +{t.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setBatchModal({ type: null })}
+                  className="px-4 py-1.5 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium transition"
+                >
+                  完成
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 批量删除确认弹窗 */}
+      {batchModal.type === 'delete' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-red-900/70 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-red-400 flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-red-400" />
+                <span>批量删除书签</span>
+              </h3>
+              <button onClick={() => setBatchModal({ type: null })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-300 leading-relaxed">
+                确定要从本地数据库中彻底删除选中的 <strong className="text-red-400 font-bold font-mono">{selectedBookmarkIds.size}</strong> 个书签吗？
+              </p>
+              <div className="p-2.5 rounded-lg bg-red-950/30 border border-red-900/50 text-[11px] text-red-300/90">
+                ⚠️ 此操作不可撤销，关联的标签索引与快照数据也将一并清除。
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setBatchModal({ type: null })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={isBatchActionLoading}
+                  onClick={handleBatchDelete}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs bg-red-600 hover:bg-red-500 text-white font-medium shadow-md transition disabled:opacity-50"
+                >
+                  {isBatchActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>彻底删除 ({selectedBookmarkIds.size})</span>
                 </button>
               </div>
             </div>
