@@ -42,15 +42,20 @@ type ChatCompletionResponse struct {
 
 // AnalyzeContent sends the article title and text to an OpenAI-compatible endpoint.
 func AnalyzeContent(title, content, apiKey, baseURL, model string) (*models.AISummaryResult, error) {
-	if apiKey == "" {
-		return nil, errors.New("API key is not configured")
-	}
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+		baseURL = "http://127.0.0.1:3425/v1"
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	if model == "" {
-		model = "gpt-4o-mini"
+		model = "auto/deepseek-v4.1-flash"
+	}
+
+	isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
+	if !isLocal && apiKey == "" {
+		return nil, errors.New("API key is not configured")
+	}
+	if isLocal && apiKey == "" {
+		apiKey = "magpie"
 	}
 
 	// Truncate long content to avoid exceeding context window

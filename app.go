@@ -65,18 +65,22 @@ func (a *App) AddBookmark(targetURL string) (*models.Bookmark, error) {
 		return nil, fmt.Errorf("failed to save bookmark: %w", err)
 	}
 
-	// Try auto AI analysis in the background if API key is present
-	apiKey, _ := keychain.GetAPIKey()
-	if apiKey != "" && len(pageMeta.ContentText) > 20 {
-		go func(bmID, title, content string) {
-			baseURL := a.db.GetSetting("ai_base_url", "https://api.openai.com/v1")
-			model := a.db.GetSetting("ai_model", "gpt-4o-mini")
+	// Try auto AI analysis in the background
+	go func(bmID, title, content string) {
+		baseURL := a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1")
+		model := a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash")
+		apiKey, _ := keychain.GetAPIKey()
+		isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
+		if isLocal && apiKey == "" {
+			apiKey = "magpie"
+		}
+		if (apiKey != "" || isLocal) && len(content) > 20 {
 			res, err := ai.AnalyzeContent(title, content, apiKey, baseURL, model)
 			if err == nil && res != nil {
 				_ = a.db.UpdateBookmarkAI(bmID, res.Summary, res.KeyTakeaways, res.SuggestedTags)
 			}
-		}(saved.ID, saved.Title, pageMeta.ContentText)
-	}
+		}
+	}(saved.ID, saved.Title, pageMeta.ContentText)
 
 	return saved, nil
 }
@@ -131,13 +135,17 @@ func (a *App) AnalyzeBookmark(id string) (*models.AISummaryResult, error) {
 		return nil, err
 	}
 
-	apiKey, err := keychain.GetAPIKey()
-	if err != nil || apiKey == "" {
+	baseURL := a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1")
+	model := a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash")
+
+	apiKey, _ := keychain.GetAPIKey()
+	isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
+	if !isLocal && apiKey == "" {
 		return nil, fmt.Errorf("AI API key is not configured. Please set it in Settings.")
 	}
-
-	baseURL := a.db.GetSetting("ai_base_url", "https://api.openai.com/v1")
-	model := a.db.GetSetting("ai_model", "gpt-4o-mini")
+	if isLocal && apiKey == "" {
+		apiKey = "magpie"
+	}
 
 	content := bm.ContentRaw
 	if content == "" {
@@ -203,8 +211,8 @@ func (a *App) GetAIConfig() (*models.AIConfig, error) {
 		hasKey = "••••••••••••••••"
 	}
 	return &models.AIConfig{
-		BaseURL: a.db.GetSetting("ai_base_url", "https://api.openai.com/v1"),
-		Model:   a.db.GetSetting("ai_model", "gpt-4o-mini"),
+		BaseURL: a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1"),
+		Model:   a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash"),
 		APIKey:  hasKey,
 	}, nil
 }

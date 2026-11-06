@@ -30,8 +30,8 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   // Settings form
-  const [aiBaseURL, setAiBaseURL] = useState('https://api.openai.com/v1');
-  const [aiModel, setAiModel] = useState('gpt-4o-mini');
+  const [aiBaseURL, setAiBaseURL] = useState('http://127.0.0.1:3425/v1');
+  const [aiModel, setAiModel] = useState('auto/deepseek-v4.1-flash');
   const [aiApiKey, setAiApiKey] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -66,8 +66,8 @@ export default function App() {
   useEffect(() => {
     GetAIConfig().then(cfg => {
       if (cfg) {
-        setAiBaseURL(cfg.base_url || 'https://api.openai.com/v1');
-        setAiModel(cfg.model || 'gpt-4o-mini');
+        setAiBaseURL(cfg.base_url || 'http://127.0.0.1:3425/v1');
+        setAiModel(cfg.model || 'auto/deepseek-v4.1-flash');
         if (cfg.api_key) setAiApiKey(cfg.api_key);
       }
     }).catch(console.error);
@@ -583,6 +583,71 @@ export default function App() {
               >
                 <X className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* 预设提供商快捷按钮 */}
+            <div>
+              <label className="block text-slate-400 text-[11px] mb-1.5 font-medium">快速预设接入点</label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAiBaseURL('http://127.0.0.1:3425/v1');
+                    setAiModel('auto/deepseek-v4.1-flash');
+                    setAiApiKey('');
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition ${
+                    aiBaseURL.includes('3425')
+                      ? 'bg-blue-600/30 text-blue-400 border-blue-500/50 shadow-sm'
+                      : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-700/60'
+                  }`}
+                >
+                  ⚡ Magpie (本地 3425)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAiBaseURL('https://api.deepseek.com/v1');
+                    setAiModel('deepseek-chat');
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition ${
+                    aiBaseURL.includes('deepseek.com')
+                      ? 'bg-blue-600/30 text-blue-400 border-blue-500/50 shadow-sm'
+                      : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-700/60'
+                  }`}
+                >
+                  DeepSeek 官方
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAiBaseURL('http://localhost:11434/v1');
+                    setAiModel('qwen2.5:7b');
+                    setAiApiKey('');
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition ${
+                    aiBaseURL.includes('11434')
+                      ? 'bg-blue-600/30 text-blue-400 border-blue-500/50 shadow-sm'
+                      : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-700/60'
+                  }`}
+                >
+                  Ollama
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAiBaseURL('https://api.openai.com/v1');
+                    setAiModel('gpt-4o-mini');
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition ${
+                    aiBaseURL.includes('openai.com')
+                      ? 'bg-blue-600/30 text-blue-400 border-blue-500/50 shadow-sm'
+                      : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-700/60'
+                  }`}
+                >
+                  OpenAI
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-3.5 text-xs">
