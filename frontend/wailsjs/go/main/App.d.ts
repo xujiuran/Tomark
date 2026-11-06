@@ -6,7 +6,13 @@ export function AddBookmark(arg1:string):Promise<models.Bookmark>;
 
 export function AnalyzeBookmark(arg1:string):Promise<models.AISummaryResult>;
 
+export function CreateCategory(arg1:string):Promise<void>;
+
 export function DeleteBookmark(arg1:string):Promise<void>;
+
+export function DeleteCategory(arg1:string,arg2:boolean):Promise<void>;
+
+export function DeleteSubCategory(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function ExportArcBookmarks():Promise<string>;
 
@@ -34,6 +40,14 @@ export function ImportBookmarkFile(arg1:string):Promise<models.ImportResult>;
 
 export function ImportFromArc():Promise<models.ImportResult>;
 
+export function MergeCategories(arg1:string,arg2:string):Promise<void>;
+
+export function MoveSubCategory(arg1:string,arg2:string):Promise<void>;
+
+export function RenameCategory(arg1:string,arg2:string):Promise<void>;
+
+export function RenameSubCategory(arg1:string,arg2:string):Promise<void>;
+
 export function ResetAndReanalyzeAll():Promise<models.AnalysisProgress>;
 
 export function SaveAIConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -46,6 +60,10 @@ export function ToggleArchive(arg1:string):Promise<boolean>;
 
 export function ToggleFavorite(arg1:string):Promise<boolean>;
 
+export function UpdateBookmarkCategory(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function UpdateBookmarkHighlights(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateBookmarkNotes(arg1:string,arg2:string):Promise<void>;
+
+export function UpdateBookmarkTags(arg1:string,arg2:Array<string>):Promise<void>;

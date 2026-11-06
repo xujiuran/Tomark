@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Bookmark as BookmarkIcon, Star, Archive, Trash2, ExternalLink, 
+  Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
-  CheckCircle, Globe, RefreshCw, X, BookOpen, Layers, FileUp,
-  Clock, AlertCircle, FolderTree, Code2, ChevronDown, ChevronRight, Compass,
-  Maximize2, Minimize2, Highlighter, Edit3, Check, Loader2, Type, Coffee, Moon, Sun,
-  FileText
+  CheckCircle, Globe, RefreshCw, X, FolderTree, ChevronDown, ChevronRight,
+  Edit3, Check, Loader2, ArrowRight, MoreVertical, LayoutGrid, Palette, Layers,
+  FileText, CornerDownRight, FolderPlus, FileUp, Compass, Bookmark as BookmarkIcon,
+  Clock, AlertCircle
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
@@ -13,62 +13,15 @@ import {
   SaveAIConfig, GetAIConfig, SelectAndImportBookmarks, 
   StartBatchAIAnalysis, GetAnalysisProgress, ResetAndReanalyzeAll,
   HasArcBrowser, ImportFromArc, ExportArcBookmarks,
-  UpdateBookmarkNotes, UpdateBookmarkHighlights, FetchAndSaveContent
+  CreateCategory, RenameCategory, MergeCategories, DeleteCategory,
+  MoveSubCategory, RenameSubCategory, DeleteSubCategory,
+  UpdateBookmarkCategory, UpdateBookmarkTags
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
-
-const CATEGORY_ICONS: Record<string, string> = {
-  '代码与开源平台': '💻',
-  '视频与流媒体': '🎬',
-  '技术文档与教程': '📖',
-  '技术博客与社区': '✍️',
-  'AI 与前沿技术': '🤖',
-  '设计与视觉灵感': '🎨',
-  '效率与开发工具': '⚡',
-  '资讯与社交媒体': '🌐',
-  '生活与日常休闲': '☕',
-  '商业与职场金融': '💼',
-};
-
-interface HighlightItem {
-  id: string;
-  text: string;
-  color: 'yellow' | 'green' | 'purple';
-  created_at: string;
-}
-
-const READER_THEMES = {
-  dark: {
-    bg: 'bg-[#0b0f17]',
-    cardBg: 'bg-[#111827]',
-    text: 'text-slate-200',
-    subtext: 'text-slate-400',
-    border: 'border-slate-800',
-    highlightYellow: 'bg-amber-400/25 text-amber-200 border-b border-amber-400/60',
-    highlightGreen: 'bg-emerald-400/25 text-emerald-200 border-b border-emerald-400/60',
-    highlightPurple: 'bg-purple-400/25 text-purple-200 border-b border-purple-400/60',
-  },
-  sepia: {
-    bg: 'bg-[#fbf0d9]',
-    cardBg: 'bg-[#f3e3be]',
-    text: 'text-[#3d2f1d]',
-    subtext: 'text-[#7d6549]',
-    border: 'border-[#dfcca5]',
-    highlightYellow: 'bg-amber-300/80 text-[#3d2f1d] border-b border-amber-600',
-    highlightGreen: 'bg-emerald-200/90 text-[#1b4332] border-b border-emerald-600',
-    highlightPurple: 'bg-purple-200/90 text-[#3c096c] border-b border-purple-600',
-  },
-  midnight: {
-    bg: 'bg-black',
-    cardBg: 'bg-[#121212]',
-    text: 'text-neutral-200',
-    subtext: 'text-neutral-500',
-    border: 'border-neutral-900',
-    highlightYellow: 'bg-amber-400/30 text-amber-200 border-b border-amber-400',
-    highlightGreen: 'bg-emerald-400/30 text-emerald-200 border-b border-emerald-400',
-    highlightPurple: 'bg-purple-400/30 text-purple-200 border-b border-purple-400',
-  },
-};
+import { 
+  QuantumLogoIcon, getCategoryTechIcon, CATEGORY_ACCENT_COLORS 
+} from './icons/techIcons';
+import { TechIconShowcase } from './components/TechIconShowcase';
 
 export default function App() {
   const [bookmarks, setBookmarks] = useState<models.Bookmark[]>([]);
@@ -80,18 +33,36 @@ export default function App() {
   const [stats, setStats] = useState<models.Stats | null>(null);
   const [selectedBookmark, setSelectedBookmark] = useState<models.Bookmark | null>(null);
 
-  // Reader & Notes state
-  const [rightTab, setRightTab] = useState<'insights' | 'reader' | 'notes'>('insights');
-  const [noteText, setNoteText] = useState('');
-  const [noteSaveStatus, setNoteSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
-  const [readerFontSize, setReaderFontSize] = useState<number>(15);
-  const [readerTheme, setReaderTheme] = useState<'dark' | 'sepia' | 'midnight'>('dark');
-  const [isReaderFullscreen, setIsReaderFullscreen] = useState(false);
-  const [isSplitNoteOpen, setIsSplitNoteOpen] = useState(true);
-  const [isFetchingContent, setIsFetchingContent] = useState(false);
-  const [selectedHighlightColor, setSelectedHighlightColor] = useState<'yellow' | 'green' | 'purple'>('yellow');
-  const [selectedText, setSelectedText] = useState('');
-  
+  // Tech Icon Showcase
+  const [isIconShowcaseOpen, setIsIconShowcaseOpen] = useState(false);
+
+  // Category & Sub-category modals & editing
+  const [isCreateCatOpen, setIsCreateCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+
+  const [catAction, setCatAction] = useState<{
+    type: 'rename' | 'merge' | 'delete' | null;
+    catName: string;
+    newName?: string;
+    targetCat?: string;
+    deleteBookmarks?: boolean;
+  }>({ type: null, catName: '' });
+
+  const [subAction, setSubAction] = useState<{
+    type: 'move' | 'rename' | 'delete' | null;
+    catName: string;
+    domain: string;
+    subName: string;
+    targetCat?: string;
+    newName?: string;
+    deleteBookmarks?: boolean;
+  }>({ type: null, catName: '', domain: '', subName: '' });
+
+  // Detail panel tag and category editing
+  const [newTagInput, setNewTagInput] = useState('');
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [detailSubCatInput, setDetailSubCatInput] = useState('');
+
   // Navigation & filters
   const [currentTab, setCurrentTab] = useState<'all' | 'favorites' | 'archived'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -241,163 +212,156 @@ export default function App() {
     }).catch(console.error);
   }, []);
 
-  // Sync noteText when selectedBookmark changes
-  useEffect(() => {
-    if (selectedBookmark) {
-      setNoteText(selectedBookmark.user_notes || '');
-      setNoteSaveStatus('idle');
-      setSelectedText('');
+  // Category management handlers
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    try {
+      await CreateCategory(newCatName.trim());
+      setNewCatName('');
+      setIsCreateCatOpen(false);
+      await loadData();
+    } catch (err: any) {
+      alert("创建分类失败: " + err);
     }
-  }, [selectedBookmark?.id]);
+  };
 
-  // Listen for Escape key to exit fullscreen reader
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isReaderFullscreen) {
-        setIsReaderFullscreen(false);
+  const handleRenameCategory = async () => {
+    if (!catAction.catName || !catAction.newName?.trim()) return;
+    try {
+      await RenameCategory(catAction.catName, catAction.newName.trim());
+      if (selectedCategory === catAction.catName) {
+        setSelectedCategory(catAction.newName.trim());
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isReaderFullscreen]);
+      setCatAction({ type: null, catName: '' });
+      await loadData();
+    } catch (err: any) {
+      alert("重命名失败: " + err);
+    }
+  };
 
-  const noteSaveTimerRef = useRef<any>(null);
+  const handleMergeCategory = async () => {
+    if (!catAction.catName || !catAction.targetCat || catAction.catName === catAction.targetCat) return;
+    try {
+      await MergeCategories(catAction.catName, catAction.targetCat);
+      if (selectedCategory === catAction.catName) {
+        setSelectedCategory(catAction.targetCat);
+      }
+      setCatAction({ type: null, catName: '' });
+      await loadData();
+    } catch (err: any) {
+      alert("合并分类失败: " + err);
+    }
+  };
 
-  const handleNoteChange = (newVal: string) => {
-    setNoteText(newVal);
+  const handleDeleteCategory = async () => {
+    if (!catAction.catName) return;
+    try {
+      await DeleteCategory(catAction.catName, !!catAction.deleteBookmarks);
+      if (selectedCategory === catAction.catName) {
+        setSelectedCategory('');
+        setSelectedDomain('');
+        setSelectedSubName('');
+      }
+      setCatAction({ type: null, catName: '' });
+      await loadData();
+    } catch (err: any) {
+      alert("删除分类失败: " + err);
+    }
+  };
+
+  const handleMoveSubCategory = async () => {
+    if (!subAction.domain || !subAction.targetCat) return;
+    try {
+      await MoveSubCategory(subAction.domain, subAction.targetCat);
+      if (selectedDomain === subAction.domain) {
+        setSelectedCategory(subAction.targetCat);
+      }
+      setSubAction({ type: null, catName: '', domain: '', subName: '' });
+      await loadData();
+    } catch (err: any) {
+      alert("转移大类失败: " + err);
+    }
+  };
+
+  const handleRenameSubCategory = async () => {
+    if (!subAction.domain || !subAction.newName?.trim()) return;
+    try {
+      await RenameSubCategory(subAction.domain, subAction.newName.trim());
+      if (selectedDomain === subAction.domain) {
+        setSelectedSubName(subAction.newName.trim());
+      }
+      setSubAction({ type: null, catName: '', domain: '', subName: '' });
+      await loadData();
+    } catch (err: any) {
+      alert("修改站点名称失败: " + err);
+    }
+  };
+
+  const handleDeleteSubCategory = async () => {
+    if (!subAction.domain) return;
+    try {
+      await DeleteSubCategory(subAction.catName, subAction.domain, !!subAction.deleteBookmarks);
+      if (selectedDomain === subAction.domain) {
+        setSelectedDomain('');
+        setSelectedSubName('');
+      }
+      setSubAction({ type: null, catName: '', domain: '', subName: '' });
+      await loadData();
+    } catch (err: any) {
+      alert("删除站点书签失败: " + err);
+    }
+  };
+
+  const handleUpdateBookmarkCat = async (cat: string, subCat?: string) => {
     if (!selectedBookmark) return;
-    setNoteSaveStatus('saving');
-
-    if (noteSaveTimerRef.current) {
-      clearTimeout(noteSaveTimerRef.current);
-    }
-
-    noteSaveTimerRef.current = setTimeout(async () => {
-      try {
-        await UpdateBookmarkNotes(selectedBookmark.id, newVal);
-        setNoteSaveStatus('saved');
-        setSelectedBookmark(prev => prev ? models.Bookmark.createFrom({ ...prev, user_notes: newVal }) : null);
-        setBookmarks(prev => prev.map(b => b.id === selectedBookmark.id ? models.Bookmark.createFrom({ ...b, user_notes: newVal }) : b));
-      } catch (e) {
-        console.error("Failed to save notes:", e);
-        setNoteSaveStatus('idle');
-      }
-    }, 600);
-  };
-
-  const insertNoteTemplate = (template: string) => {
-    const updated = noteText ? `${noteText}\n\n${template}` : template;
-    handleNoteChange(updated);
-  };
-
-  const handleFetchContent = async (bmId: string) => {
-    setIsFetchingContent(true);
     try {
-      const text = await FetchAndSaveContent(bmId);
-      if (text) {
-        setSelectedBookmark(prev => prev ? models.Bookmark.createFrom({ ...prev, content_raw: text }) : null);
-        setBookmarks(prev => prev.map(b => b.id === bmId ? models.Bookmark.createFrom({ ...b, content_raw: text }) : b));
-      }
-    } catch (e: any) {
-      alert("提取网页正文失败: " + e);
-    } finally {
-      setIsFetchingContent(false);
+      const finalSub = subCat !== undefined ? subCat : selectedBookmark.sub_category;
+      await UpdateBookmarkCategory(selectedBookmark.id, cat, finalSub);
+      setSelectedBookmark(prev => prev ? models.Bookmark.createFrom({ ...prev, category: cat, sub_category: finalSub }) : null);
+      setBookmarks(prev => prev.map(b => b.id === selectedBookmark.id ? models.Bookmark.createFrom({ ...b, category: cat, sub_category: finalSub }) : b));
+      await loadData();
+      setIsEditingCategory(false);
+    } catch (err: any) {
+      alert("修改书签分类失败: " + err);
     }
   };
 
-  const getHighlights = (bm?: models.Bookmark | null): HighlightItem[] => {
-    if (!bm || !bm.highlights) return [];
+  const handleRemoveTag = async (tagToRemove: string) => {
+    if (!selectedBookmark) return;
+    const currentTags = selectedBookmark.tags || [];
+    const updated = currentTags.filter(t => t !== tagToRemove);
     try {
-      const parsed = JSON.parse(bm.highlights);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
+      await UpdateBookmarkTags(selectedBookmark.id, updated);
+      setSelectedBookmark(prev => prev ? models.Bookmark.createFrom({ ...prev, tags: updated }) : null);
+      setBookmarks(prev => prev.map(b => b.id === selectedBookmark.id ? models.Bookmark.createFrom({ ...b, tags: updated }) : b));
+      const t = await GetTags();
+      setTags(t || []);
+    } catch (err: any) {
+      alert("移除标签失败: " + err);
     }
   };
 
-  const handleAddHighlight = async (text: string, color: 'yellow' | 'green' | 'purple') => {
-    if (!selectedBookmark || !text.trim()) return;
-    const current = getHighlights(selectedBookmark);
-    if (current.some(h => h.text === text.trim())) {
-      setSelectedText('');
+  const handleAddTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBookmark || !newTagInput.trim()) return;
+    const val = newTagInput.trim();
+    const currentTags = selectedBookmark.tags || [];
+    if (currentTags.includes(val)) {
+      setNewTagInput('');
       return;
     }
-    const newItem: HighlightItem = {
-      id: Date.now().toString(),
-      text: text.trim(),
-      color,
-      created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    const updated = [newItem, ...current];
-    const jsonStr = JSON.stringify(updated);
+    const updated = [...currentTags, val];
     try {
-      await UpdateBookmarkHighlights(selectedBookmark.id, jsonStr);
-      setSelectedBookmark(prev => prev ? models.Bookmark.createFrom({ ...prev, highlights: jsonStr }) : null);
-      setBookmarks(prev => prev.map(b => b.id === selectedBookmark.id ? models.Bookmark.createFrom({ ...b, highlights: jsonStr }) : b));
-      setSelectedText('');
-    } catch (e) {
-      console.error("Failed to save highlight:", e);
+      await UpdateBookmarkTags(selectedBookmark.id, updated);
+      setSelectedBookmark(prev => prev ? models.Bookmark.createFrom({ ...prev, tags: updated }) : null);
+      setBookmarks(prev => prev.map(b => b.id === selectedBookmark.id ? models.Bookmark.createFrom({ ...b, tags: updated }) : b));
+      setNewTagInput('');
+      const t = await GetTags();
+      setTags(t || []);
+    } catch (err: any) {
+      alert("添加标签失败: " + err);
     }
-  };
-
-  const handleDeleteHighlight = async (highlightId: string) => {
-    if (!selectedBookmark) return;
-    const current = getHighlights(selectedBookmark);
-    const updated = current.filter(h => h.id !== highlightId);
-    const jsonStr = JSON.stringify(updated);
-    try {
-      await UpdateBookmarkHighlights(selectedBookmark.id, jsonStr);
-      setSelectedBookmark(prev => prev ? models.Bookmark.createFrom({ ...prev, highlights: jsonStr }) : null);
-      setBookmarks(prev => prev.map(b => b.id === selectedBookmark.id ? models.Bookmark.createFrom({ ...b, highlights: jsonStr }) : b));
-    } catch (e) {
-      console.error("Failed to delete highlight:", e);
-    }
-  };
-
-  const getReadingStats = (text: string) => {
-    const chars = text ? text.replace(/\s+/g, '').length : 0;
-    const minutes = Math.max(1, Math.ceil(chars / 450));
-    return { chars, minutes };
-  };
-
-  const renderParagraphs = (content: string, currentHighlights: HighlightItem[], themeKey: 'dark' | 'sepia' | 'midnight', fontSize: number) => {
-    if (!content) return null;
-    const theme = READER_THEMES[themeKey];
-    const paragraphs = content.split(/\n+/).map(p => p.trim()).filter(Boolean);
-
-    return paragraphs.map((para, pIdx) => {
-      let parts: React.ReactNode[] = [para];
-
-      currentHighlights.forEach(hl => {
-        if (!hl.text || !para.includes(hl.text)) return;
-        const newParts: React.ReactNode[] = [];
-        parts.forEach(part => {
-          if (typeof part === 'string' && part.includes(hl.text)) {
-            const split = part.split(hl.text);
-            split.forEach((subStr, sIdx) => {
-              if (sIdx > 0) {
-                const colorClass = hl.color === 'green' ? theme.highlightGreen : hl.color === 'purple' ? theme.highlightPurple : theme.highlightYellow;
-                newParts.push(
-                  <mark key={`${hl.id}-${sIdx}`} className={`px-1 py-0.5 rounded cursor-pointer transition ${colorClass}`} title={`划线于 ${hl.created_at}`}>
-                    {hl.text}
-                  </mark>
-                );
-              }
-              if (subStr) newParts.push(subStr);
-            });
-          } else {
-            newParts.push(part);
-          }
-        });
-        parts = newParts;
-      });
-
-      return (
-        <p key={pIdx} className="mb-5 leading-loose text-justify font-serif" style={{ fontSize: `${fontSize}px` }}>
-          {parts}
-        </p>
-      );
-    });
   };
 
   const handleAddBookmark = async (e: React.FormEvent) => {
@@ -488,13 +452,13 @@ export default function App() {
       >
         {/* 左侧：为 macOS 交通灯留出充足空间 (pl-[92px])，展示 Logo 与标题 */}
         <div className="flex items-center gap-3 pl-[88px] min-w-0" style={{ '--wails-draggable': 'no-drag' } as any}>
-          <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-            <BookmarkIcon className="w-3.5 h-3.5 text-white" />
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-900/60 to-indigo-900/40 border border-blue-500/30 flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+            <QuantumLogoIcon size={18} glow={true} />
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm tracking-wide text-white">Linkit</span>
+            <span className="font-bold text-sm tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-indigo-200 to-cyan-300">Linkit</span>
             <span className="text-slate-600 text-xs hidden sm:inline">/</span>
-            <span className="text-xs text-slate-400 font-medium hidden sm:inline">AI Bookmark & PKM</span>
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">Quantum Taxonomy</span>
           </div>
         </div>
 
@@ -561,6 +525,15 @@ export default function App() {
             <span>添加书签</span>
           </button>
 
+          <button
+            onClick={() => setIsIconShowcaseOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-200 border border-cyan-700/50 text-xs font-medium shadow-sm transition shrink-0"
+            title="浏览本地科技感图标与文件映射图鉴"
+          >
+            <Palette className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden md:inline">科技图鉴</span>
+          </button>
+
           <button 
             onClick={() => setIsSettingsOpen(true)}
             className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition shrink-0"
@@ -624,9 +597,22 @@ export default function App() {
                 <FolderTree className="w-3.5 h-3.5 text-blue-400" />
                 <span>分类与站点</span>
               </div>
-              <span className="text-[10px] text-slate-500 font-mono">
-                {hierarchies.length} 大类
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {hierarchies.length} 大类
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCreateCatOpen(true);
+                  }}
+                  className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                  title="新建一级大类"
+                >
+                  <Plus className="w-3 h-3 text-blue-400" />
+                </button>
+              </div>
             </div>
 
             <div className="mt-1 space-y-1 select-none pr-0.5">
@@ -640,7 +626,7 @@ export default function App() {
                     <div
                       className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition cursor-pointer group ${
                         isCatActive
-                          ? 'bg-blue-600/30 text-blue-400 border border-blue-500/40 font-semibold'
+                          ? 'bg-blue-600/30 text-blue-400 border border-blue-500/40 font-semibold shadow-sm'
                           : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
                       }`}
                       onClick={() => {
@@ -663,7 +649,7 @@ export default function App() {
                             e.stopPropagation();
                             setExpandedCategories(prev => ({ ...prev, [cat.name]: !isExpanded }));
                           }}
-                          className="p-0.5 rounded hover:bg-slate-700/60 text-slate-500 hover:text-slate-300 transition"
+                          className="p-0.5 rounded hover:bg-slate-700/60 text-slate-500 hover:text-slate-300 transition shrink-0"
                         >
                           {isExpanded ? (
                             <ChevronDown className="w-3 h-3" />
@@ -671,10 +657,51 @@ export default function App() {
                             <ChevronRight className="w-3 h-3" />
                           )}
                         </button>
-                        <span className="text-xs shrink-0">{CATEGORY_ICONS[cat.name] || '📁'}</span>
+                        {getCategoryTechIcon(cat.name, 14, "shrink-0", isCatActive)}
                         <span className="truncate">{cat.name}</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-mono bg-slate-800/80 px-1.5 py-0.5 rounded-full">{cat.count}</span>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* 悬停大类管理快捷图标 */}
+                        <div className="hidden group-hover:flex items-center gap-0.5 bg-slate-900/90 rounded px-1 py-0.5 border border-slate-700/60 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCatAction({ type: 'rename', catName: cat.name, newName: cat.name });
+                            }}
+                            className="p-0.5 rounded hover:text-blue-400 text-slate-400 transition"
+                            title="重命名大类"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCatAction({ type: 'merge', catName: cat.name, targetCat: '' });
+                            }}
+                            className="p-0.5 rounded hover:text-amber-400 text-slate-400 transition"
+                            title="合并至其他分类"
+                          >
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCatAction({ type: 'delete', catName: cat.name, deleteBookmarks: false });
+                            }}
+                            className="p-0.5 rounded hover:text-red-400 text-slate-400 transition"
+                            title="删除大类"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-mono bg-slate-800/80 px-1.5 py-0.5 rounded-full group-hover:hidden">
+                          {cat.count}
+                        </span>
+                      </div>
                     </div>
 
                     {/* 二级站点/主域名行 (仅在展开且有二级分类时显示) */}
@@ -683,9 +710,8 @@ export default function App() {
                         {cat.sub_categories.map((sub) => {
                           const isSubSelected = selectedDomain === sub.domain;
                           return (
-                            <button
+                            <div
                               key={`${cat.name}-${sub.domain}`}
-                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (isSubSelected) {
@@ -698,18 +724,59 @@ export default function App() {
                                   setSelectedTag('');
                                 }
                               }}
-                              className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-[11px] transition ${
+                              className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-[11px] transition cursor-pointer group/sub ${
                                 isSubSelected
                                   ? 'bg-blue-600/40 text-blue-300 border border-blue-500/50 font-medium'
                                   : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
                               }`}
                             >
                               <div className="flex items-center gap-1.5 truncate">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSubSelected ? 'bg-blue-400' : 'bg-slate-600'}`}></span>
                                 <span className="truncate">{sub.name}</span>
                               </div>
-                              <span className="text-[10px] text-slate-500 font-mono">{sub.count}</span>
-                            </button>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                {/* 悬停站点管理快捷图标 */}
+                                <div className="hidden group-hover/sub:flex items-center gap-0.5 bg-slate-900/90 rounded px-1 py-0.5 border border-slate-700/60 shadow-sm">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSubAction({ type: 'move', catName: cat.name, domain: sub.domain, subName: sub.name, targetCat: cat.name });
+                                    }}
+                                    className="p-0.5 rounded hover:text-cyan-400 text-slate-400 transition"
+                                    title="将该站点书签移动到其他大类"
+                                  >
+                                    <FolderPlus className="w-2.5 h-2.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSubAction({ type: 'rename', catName: cat.name, domain: sub.domain, subName: sub.name, newName: sub.name });
+                                    }}
+                                    className="p-0.5 rounded hover:text-blue-400 text-slate-400 transition"
+                                    title="修改站点显示别名"
+                                  >
+                                    <Edit3 className="w-2.5 h-2.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSubAction({ type: 'delete', catName: cat.name, domain: sub.domain, subName: sub.name, deleteBookmarks: true });
+                                    }}
+                                    className="p-0.5 rounded hover:text-red-400 text-slate-400 transition"
+                                    title="删除该站点的书签"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                                <span className="text-[10px] text-slate-500 font-mono group-hover/sub:hidden">
+                                  {sub.count}
+                                </span>
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
@@ -805,9 +872,10 @@ export default function App() {
                   <span className="text-slate-600">/</span>
                   <button
                     onClick={() => { setSelectedDomain(''); setSelectedSubName(''); }}
-                    className={`px-1.5 py-0.5 rounded transition ${!selectedDomain ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-blue-300'}`}
+                    className={`px-1.5 py-0.5 rounded transition flex items-center gap-1.5 ${!selectedDomain ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-blue-300'}`}
                   >
-                    {CATEGORY_ICONS[selectedCategory] || '📁'} {selectedCategory}
+                    {getCategoryTechIcon(selectedCategory, 13)}
+                    <span>{selectedCategory}</span>
                   </button>
                 </div>
               )}
@@ -920,29 +988,18 @@ export default function App() {
                   )}
 
                   {/* Category, Notes, Content & Tags row */}
-                  {((bm.tags && bm.tags.length > 0) || bm.category || bm.user_notes || bm.content_raw) && (
+                  {/* Category & Tags row (Pure bookmark focus) */}
+                  {((bm.tags && bm.tags.length > 0) || bm.category) && (
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
                       {bm.category && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50 flex items-center gap-1">
-                          <span>{CATEGORY_ICONS[bm.category] || '📁'}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-slate-900/90 text-blue-300 border border-slate-700/70 flex items-center gap-1.5 shadow-sm">
+                          {getCategoryTechIcon(bm.category, 12)}
                           <span>{bm.category}</span>
-                          {bm.sub_category && <span className="opacity-80">· {bm.sub_category}</span>}
-                        </span>
-                      )}
-                      {bm.user_notes && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-950/60 text-amber-300 border border-amber-700/60 flex items-center gap-1 shadow-sm" title={bm.user_notes}>
-                          <Edit3 className="w-2.5 h-2.5 text-amber-400" />
-                          <span>有笔记</span>
-                        </span>
-                      )}
-                      {bm.content_raw && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50 flex items-center gap-1" title="正文已提取，可沉浸阅读">
-                          <BookOpen className="w-2.5 h-2.5 text-emerald-400" />
-                          <span>可阅读</span>
+                          {bm.sub_category && <span className="text-slate-400">· {bm.sub_category}</span>}
                         </span>
                       )}
                       {bm.tags && bm.tags.map((t, idx) => (
-                        <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/50">
+                        <span key={idx} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800/80 text-slate-300 border border-slate-700/50">
                           #{t}
                         </span>
                       ))}
@@ -954,7 +1011,7 @@ export default function App() {
 
             {bookmarks.length === 0 && (
               <div className="text-center py-16">
-                <BookOpen className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                <QuantumLogoIcon size={36} className="mx-auto mb-3 opacity-30 text-blue-400" />
                 <p className="text-sm text-slate-400 font-medium">书签库空空如也</p>
                 <p className="text-xs text-slate-500 mt-1">点击右上角「+ 添加书签」输入任意网页链接体验 AI 自动解析</p>
               </div>
@@ -966,105 +1023,195 @@ export default function App() {
         <aside className="w-96 xl:w-[420px] flex flex-col border-l border-slate-800/80 bg-[#0f1420]/50 backdrop-blur-xl shrink-0">
           {selectedBookmark ? (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
-              {/* 顶栏 Tab 切换栏 */}
-              <div className="h-10 px-3 border-b border-slate-800/60 flex items-center justify-between select-none shrink-0 bg-[#0c1017]/40">
-                <div className="flex items-center gap-1 p-0.5 bg-slate-900/90 rounded-lg border border-slate-800/60 text-xs">
-                  <button
-                    onClick={() => setRightTab('insights')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-[11px] ${
-                      rightTab === 'insights'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <Sparkles className="w-3 h-3 text-blue-300" />
-                    <span>AI 洞察</span>
-                  </button>
-                  <button
-                    onClick={() => setRightTab('reader')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-[11px] ${
-                      rightTab === 'reader'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <BookOpen className="w-3 h-3" />
-                    <span>阅读器</span>
-                    {selectedBookmark.content_raw && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setRightTab('notes')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-[11px] ${
-                      rightTab === 'notes'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>笔记</span>
-                    {selectedBookmark.user_notes && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                    )}
-                  </button>
+              {/* 顶栏操作区 */}
+              <div className="h-11 px-4 border-b border-slate-800/70 flex items-center justify-between shrink-0 bg-[#0b0f17]/60">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white tracking-wide flex items-center gap-1.5">
+                    {getCategoryTechIcon(selectedBookmark.category, 14)}
+                    <span>书签元数据与分类</span>
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {rightTab === 'reader' && selectedBookmark.content_raw && (
-                    <button
-                      onClick={() => setIsReaderFullscreen(true)}
-                      className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
-                      title="全屏沉浸阅读"
-                    >
-                      <Maximize2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleToggleFav(selectedBookmark.id)}
+                    className={`p-1.5 rounded-md transition ${selectedBookmark.is_favorite ? 'text-amber-400 bg-amber-950/30' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'}`}
+                    title={selectedBookmark.is_favorite ? '取消星标' : '设为星标'}
+                  >
+                    <Star className={`w-3.5 h-3.5 ${selectedBookmark.is_favorite ? 'fill-current' : ''}`} />
+                  </button>
+                  <button
+                    onClick={() => handleToggleArchive(selectedBookmark.id)}
+                    className={`p-1.5 rounded-md transition ${selectedBookmark.is_archived ? 'text-blue-400 bg-blue-950/30' : 'text-slate-400 hover:text-blue-400 hover:bg-slate-800'}`}
+                    title={selectedBookmark.is_archived ? '移出归档' : '归档书签'}
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                  </button>
                   <a
                     href={selectedBookmark.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition"
+                    className="p-1.5 rounded-md text-slate-400 hover:text-blue-400 hover:bg-slate-800 transition"
                     title="在浏览器中打开原网页"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
+                  <button
+                    onClick={() => handleDelete(selectedBookmark.id)}
+                    className="p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-slate-800 transition"
+                    title="删除此书签"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
-              {/* 选项卡 1：AI 知识洞察 */}
-              {rightTab === 'insights' && (
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {selectedBookmark.cover_image && (
-                    <img
-                      src={selectedBookmark.cover_image}
-                      alt=""
-                      className="w-full h-36 object-cover rounded-xl border border-slate-800"
-                    />
-                  )}
+              {/* 详情主体滚动区 */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 select-text">
+                {selectedBookmark.cover_image && (
+                  <img
+                    src={selectedBookmark.cover_image}
+                    alt=""
+                    className="w-full h-36 object-cover rounded-xl border border-slate-800 shadow-md"
+                  />
+                )}
 
-                  <div>
-                    <h2 className="text-base font-bold text-white leading-snug">
-                      {selectedBookmark.title}
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-1 break-all font-mono">
-                      {selectedBookmark.url}
-                    </p>
-                    {selectedBookmark.category && (
-                      <div className="flex items-center gap-1.5 mt-2">
-                        <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 font-medium inline-flex items-center gap-1">
-                          <span>{CATEGORY_ICONS[selectedBookmark.category] || '📁'}</span>
-                          <span>{selectedBookmark.category}</span>
+                {/* 标题与网址 */}
+                <div className="space-y-1.5">
+                  <h2 className="text-sm font-bold text-white leading-snug">
+                    {selectedBookmark.title}
+                  </h2>
+                  <a 
+                    href={selectedBookmark.url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-xs text-blue-400/90 hover:underline break-all font-mono block"
+                  >
+                    {selectedBookmark.url}
+                  </a>
+                </div>
+
+                {/* 核心分类管理器 (Category & Sub-Category Reassignment) */}
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <FolderTree className="w-3.5 h-3.5 text-blue-400" />
+                      <span>所属大类与二级站点</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setIsEditingCategory(!isEditingCategory);
+                        setDetailSubCatInput(selectedBookmark.sub_category || '');
+                      }}
+                      className="text-[10px] text-blue-400 hover:underline font-medium"
+                    >
+                      {isEditingCategory ? '完成' : '修改分类'}
+                    </button>
+                  </div>
+
+                  {!isEditingCategory ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs px-2.5 py-1 rounded-lg bg-blue-950/60 text-blue-300 border border-blue-700/50 font-medium inline-flex items-center gap-1.5 shadow-sm">
+                        {getCategoryTechIcon(selectedBookmark.category, 14)}
+                        <span>{selectedBookmark.category || '未分类'}</span>
+                      </span>
+
+                      {selectedBookmark.sub_category && (
+                        <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 font-medium inline-flex items-center gap-1.5">
+                          <Globe className="w-3.5 h-3.5 text-blue-400" />
+                          <span>{selectedBookmark.sub_category}</span>
                         </span>
-                        {selectedBookmark.sub_category && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-medium inline-flex items-center gap-1">
-                            <Globe className="w-3 h-3 text-blue-400" />
-                            <span>{selectedBookmark.sub_category}</span>
-                          </span>
-                        )}
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 pt-1">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">选择归属大类</label>
+                        <select
+                          value={selectedBookmark.category || ''}
+                          onChange={(e) => handleUpdateBookmarkCat(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="">未分类</option>
+                          {hierarchies.map(h => (
+                            <option key={h.name} value={h.name}>{h.name}</option>
+                          ))}
+                        </select>
                       </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">二级站点显示别名</label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="如: GitHub 社区 / 季然博客"
+                            value={detailSubCatInput}
+                            onChange={(e) => setDetailSubCatInput(e.target.value)}
+                            className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateBookmarkCat(selectedBookmark.category, detailSubCatInput)}
+                            className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition"
+                          >
+                            保存
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 标签管理 (Tag Management) */}
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <TagIcon className="w-3.5 h-3.5 text-blue-400" />
+                      <span>标签管理 ({(selectedBookmark.tags || []).length})</span>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {(selectedBookmark.tags || []).map((t, idx) => (
+                      <span 
+                        key={idx} 
+                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700/80 inline-flex items-center gap-1.5 group"
+                      >
+                        <span>#{t}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(t)}
+                          className="text-slate-500 hover:text-red-400 transition"
+                          title="移除标签"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+
+                    {(!selectedBookmark.tags || selectedBookmark.tags.length === 0) && (
+                      <span className="text-[11px] text-slate-500 italic">暂无标签</span>
                     )}
                   </div>
+
+                  {/* 快速追加标签表单 */}
+                  <form onSubmit={handleAddTag} className="flex gap-1.5 pt-1">
+                    <input
+                      type="text"
+                      placeholder="+ 添加标签，回车保存..."
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newTagInput.trim()}
+                      className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition disabled:opacity-40"
+                    >
+                      添加
+                    </button>
+                  </form>
+                </div>
 
                   {/* AI 知识洞察 */}
                   <div className="p-3.5 rounded-xl bg-gradient-to-b from-blue-950/30 to-indigo-950/20 border border-blue-800/40 space-y-3">
@@ -1088,8 +1235,8 @@ export default function App() {
                         {selectedBookmark.category && (
                           <div className="flex items-center justify-between pb-2 border-b border-blue-900/30">
                             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">归属分类</span>
-                            <span className="text-xs font-medium text-blue-300 flex items-center gap-1">
-                              <span>{CATEGORY_ICONS[selectedBookmark.category] || '📁'}</span>
+                            <span className="text-xs font-medium text-blue-300 flex items-center gap-1.5">
+                              {getCategoryTechIcon(selectedBookmark.category, 13)}
                               <span>{selectedBookmark.category}</span>
                             </span>
                           </div>
@@ -1119,572 +1266,394 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* 快捷跳转阅读与笔记卡片 */}
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      onClick={() => setRightTab('reader')}
-                      className="p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-left transition group"
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <BookOpen className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition" />
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {selectedBookmark.content_raw ? '离线就绪' : '未提取'}
-                        </span>
-                      </div>
-                      <div className="text-xs font-semibold text-slate-200">进入阅读器</div>
-                      <div className="text-[10px] text-slate-400 truncate mt-0.5">清爽长文排版与划线</div>
-                    </button>
-
-                    <button
-                      onClick={() => setRightTab('notes')}
-                      className="p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-left transition group"
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <Edit3 className="w-4 h-4 text-amber-400 group-hover:scale-110 transition" />
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {selectedBookmark.user_notes ? '已有笔记' : '草稿'}
-                        </span>
-                      </div>
-                      <div className="text-xs font-semibold text-slate-200">私人笔记</div>
-                      <div className="text-[10px] text-slate-400 truncate mt-0.5">记录思考心得与批注</div>
-                    </button>
+                {/* 科技图鉴快捷入口卡片 */}
+                <div 
+                  onClick={() => setIsIconShowcaseOpen(true)}
+                  className="p-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 border border-slate-800 hover:border-blue-500/40 transition cursor-pointer flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-blue-950/60 border border-blue-500/30 flex items-center justify-center">
+                      <Palette className="w-3.5 h-3.5 text-blue-400 group-hover:scale-110 transition" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-200">开源科技感图标图鉴</div>
+                      <div className="text-[10px] text-slate-400">浏览本地科技微标与文件格式映射</div>
+                    </div>
                   </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-0.5 transition" />
                 </div>
-              )}
+              </div>
 
-              {/* 选项卡 2：沉浸式阅读器 */}
-              {rightTab === 'reader' && (
-                <div className={`flex-1 flex flex-col h-full overflow-hidden ${READER_THEMES[readerTheme].bg} ${READER_THEMES[readerTheme].text}`}>
-                  {/* 控制工具条 */}
-                  <div className={`px-3 py-2 border-b flex items-center justify-between text-xs shrink-0 ${READER_THEMES[readerTheme].border} ${READER_THEMES[readerTheme].cardBg}`}>
-                    {/* 字数与预估时间 */}
-                    <div className="flex items-center gap-2 text-[11px] opacity-80 font-mono">
-                      <span>{getReadingStats(selectedBookmark.content_raw).chars} 字</span>
-                      <span>·</span>
-                      <span>约 {getReadingStats(selectedBookmark.content_raw).minutes} 分钟</span>
-                    </div>
 
-                    {/* 控制按钮组 */}
-                    <div className="flex items-center gap-1.5">
-                      {/* 字号调整 */}
-                      <div className="flex items-center border border-slate-700/60 rounded px-1 text-[11px]">
-                        <button
-                          onClick={() => setReaderFontSize(s => Math.max(12, s - 1))}
-                          className="px-1 hover:text-blue-400"
-                          title="缩小字号"
-                        >
-                          A-
-                        </button>
-                        <span className="text-[10px] opacity-60 mx-0.5">{readerFontSize}</span>
-                        <button
-                          onClick={() => setReaderFontSize(s => Math.min(22, s + 1))}
-                          className="px-1 hover:text-blue-400"
-                          title="放大字号"
-                        >
-                          A+
-                        </button>
-                      </div>
-
-                      {/* 主题选择 */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setReaderTheme('dark')}
-                          className={`w-3.5 h-3.5 rounded-full bg-[#111827] border ${readerTheme === 'dark' ? 'ring-2 ring-blue-500 border-white' : 'border-slate-600'}`}
-                          title="深空暗黑主题"
-                        />
-                        <button
-                          onClick={() => setReaderTheme('sepia')}
-                          className={`w-3.5 h-3.5 rounded-full bg-[#fbf0d9] border ${readerTheme === 'sepia' ? 'ring-2 ring-blue-500 border-amber-800' : 'border-amber-300'}`}
-                          title="暖沙羊皮纸护眼主题"
-                        />
-                        <button
-                          onClick={() => setReaderTheme('midnight')}
-                          className={`w-3.5 h-3.5 rounded-full bg-black border ${readerTheme === 'midnight' ? 'ring-2 ring-blue-500 border-white' : 'border-neutral-700'}`}
-                          title="极黑纯粹主题"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 选中文本时的浮动划线工具条 */}
-                  {selectedText && (
-                    <div className="mx-3 my-2 p-1.5 rounded-lg bg-slate-800 border border-slate-700 shadow-xl flex items-center justify-between text-xs animate-in fade-in">
-                      <span className="text-[11px] text-slate-300 truncate max-w-[130px] italic">
-                        "{selectedText}"
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => handleAddHighlight(selectedText, 'yellow')}
-                          className="px-1.5 py-0.5 rounded bg-amber-400 text-slate-900 font-medium text-[10px] hover:bg-amber-300 transition"
-                        >
-                          🟡 划线
-                        </button>
-                        <button
-                          onClick={() => handleAddHighlight(selectedText, 'green')}
-                          className="px-1.5 py-0.5 rounded bg-emerald-400 text-slate-900 font-medium text-[10px] hover:bg-emerald-300 transition"
-                        >
-                          🟢 重点
-                        </button>
-                        <button
-                          onClick={() => {
-                            insertNoteTemplate(`> ${selectedText}\n\n我的想法：`);
-                            setSelectedText('');
-                            setRightTab('notes');
-                          }}
-                          className="px-1.5 py-0.5 rounded bg-blue-600 text-white font-medium text-[10px] hover:bg-blue-500 transition"
-                        >
-                          📝 记入笔记
-                        </button>
-                        <button
-                          onClick={() => setSelectedText('')}
-                          className="p-0.5 hover:text-slate-400"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 阅读正文区域 */}
-                  <div
-                    onMouseUp={() => {
-                      const sel = window.getSelection();
-                      const t = sel ? sel.toString().trim() : '';
-                      if (t.length > 2) setSelectedText(t);
-                    }}
-                    className="flex-1 overflow-y-auto p-4 select-text"
-                  >
-                    {selectedBookmark.content_raw ? (
-                      <div className="space-y-4">
-                        <h1 className="text-base font-bold leading-snug pb-2 border-b border-slate-800/60 font-serif">
-                          {selectedBookmark.title}
-                        </h1>
-
-                        <div className="pt-2">
-                          {renderParagraphs(
-                            selectedBookmark.content_raw,
-                            getHighlights(selectedBookmark),
-                            readerTheme,
-                            readerFontSize
-                          )}
-                        </div>
-
-                        {/* 划线列表区块 */}
-                        {getHighlights(selectedBookmark).length > 0 && (
-                          <div className="mt-8 pt-4 border-t border-slate-800/80">
-                            <div className="flex items-center justify-between text-xs font-semibold mb-2 opacity-80">
-                              <span className="flex items-center gap-1">
-                                <Highlighter className="w-3.5 h-3.5 text-amber-400" />
-                                <span>我的划线批注 ({getHighlights(selectedBookmark).length})</span>
-                              </span>
-                            </div>
-                            <div className="space-y-1.5">
-                              {getHighlights(selectedBookmark).map(hl => (
-                                <div key={hl.id} className="p-2 rounded bg-slate-900/40 border border-slate-800/60 text-xs flex items-start justify-between gap-2">
-                                  <div className="flex-1">
-                                    <p className="italic text-slate-300">"{hl.text}"</p>
-                                    <span className="text-[10px] text-slate-500 mt-0.5 block">{hl.created_at}</span>
-                                  </div>
-                                  <button
-                                    onClick={() => handleDeleteHighlight(hl.id)}
-                                    className="text-slate-500 hover:text-red-400 transition p-1"
-                                    title="删除划线"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
-                        <BookOpen className="w-10 h-10 text-slate-600 opacity-60" />
-                        <div>
-                          <p className="text-xs font-semibold text-slate-300">正文尚未离线抓取</p>
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            点击下方按钮使用 Readability 智能提取文章纯净正文
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleFetchContent(selectedBookmark.id)}
-                          disabled={isFetchingContent}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition disabled:opacity-50 shadow"
-                        >
-                          {isFetchingContent ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              <span>正文智能提取中...</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileText className="w-3.5 h-3.5" />
-                              <span>一键离线提取正文</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* 选项卡 3：私人笔记与知识沉淀 */}
-              {rightTab === 'notes' && (
-                <div className="flex-1 flex flex-col h-full overflow-hidden p-4 space-y-3">
-                  {/* 笔记标题与自动保存状态 */}
-                  <div className="flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
-                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                      <span>我的随想与知识笔记</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {noteSaveStatus === 'saving' && '正在保存...'}
-                      {noteSaveStatus === 'saved' && '● 已自动保存至 SQLite'}
-                      {noteSaveStatus === 'idle' && (selectedBookmark.user_notes ? '已同步' : '空白草稿')}
-                    </span>
-                  </div>
-
-                  {/* 快捷模板栏 */}
-                  <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto pb-1 text-[11px]">
-                    <span className="text-[10px] text-slate-500 shrink-0">快捷模板:</span>
-                    <button
-                      onClick={() => insertNoteTemplate('💡 核心启发：\n- ')}
-                      className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition shrink-0"
-                    >
-                      💡 核心启发
-                    </button>
-                    <button
-                      onClick={() => insertNoteTemplate('📌 落地实践：\n1. ')}
-                      className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition shrink-0"
-                    >
-                      📌 落地实践
-                    </button>
-                    <button
-                      onClick={() => insertNoteTemplate('⚠️ 疑问/待考证：\n- ')}
-                      className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition shrink-0"
-                    >
-                      ⚠️ 疑问备忘
-                    </button>
-                  </div>
-
-                  {/* 笔记编辑框 */}
-                  <div className="flex-1 flex flex-col min-h-0">
-                    <textarea
-                      value={noteText}
-                      onChange={(e) => handleNoteChange(e.target.value)}
-                      placeholder="写下你对本篇文章的理解、核心启发、落地步骤或行动清单...（支持 Markdown，内容会自动实时保存至本地数据库）"
-                      className="flex-1 w-full p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 leading-relaxed font-sans resize-none select-text"
-                    />
-                  </div>
-
-                  {/* 笔记底部信息 */}
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 shrink-0">
-                    <span>{noteText.length} 字</span>
-                    <span>支持标准 Markdown 语法</span>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               <div className="h-10 px-4 border-b border-slate-800/60 flex items-center justify-between text-xs select-none shrink-0 bg-[#0c1017]/40">
-                <span className="font-semibold text-slate-500">书签详情 & 阅读洞察</span>
+                <span className="font-semibold text-slate-400">书签详情 & 分类管理</span>
               </div>
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
-                <Layers className="w-8 h-8 mb-2 opacity-50" />
-                <p className="text-xs">选择左侧任意书签查看 AI 摘要、沉浸阅读正文或记录私人笔记</p>
+                <QuantumLogoIcon size={36} className="mb-3 opacity-40 text-blue-400" />
+                <p className="text-xs text-slate-400 font-medium">选择任意书签查看 AI 智能摘要、归类与标签管理</p>
+                <p className="text-[11px] text-slate-600 mt-1 max-w-[220px]">
+                  可在右侧实时调整大类归属、自定义站点别名与编辑标签
+                </p>
               </div>
             </div>
           )}
         </aside>
       </div>
 
-      {/* 4. 全屏沉浸式大阅读器弹窗 (Full-window Immersive Reader) */}
-      {isReaderFullscreen && selectedBookmark && (
-        <div className={`fixed inset-0 z-50 flex flex-col ${READER_THEMES[readerTheme].bg} ${READER_THEMES[readerTheme].text}`}>
-          {/* 顶部工具栏 */}
-          <header className={`h-14 px-6 border-b flex items-center justify-between shrink-0 select-none ${READER_THEMES[readerTheme].border} ${READER_THEMES[readerTheme].cardBg}`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                onClick={() => setIsReaderFullscreen(false)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition ${READER_THEMES[readerTheme].border} hover:opacity-80`}
-                title="退出阅读模式 (Esc)"
-              >
-                <Minimize2 className="w-3.5 h-3.5" />
-                <span>退出阅读 (Esc)</span>
+
+      {/* 科技感图标图鉴弹窗 */}
+      <TechIconShowcase
+        isOpen={isIconShowcaseOpen}
+        onClose={() => setIsIconShowcaseOpen(false)}
+      />
+
+      {/* 新建大类弹窗 */}
+      {isCreateCatOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-slate-700/80 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <FolderPlus className="w-4 h-4 text-blue-400" />
+                <span>新建自定义大类</span>
+              </h3>
+              <button onClick={() => setIsCreateCatOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
               </button>
-
-              <div className="h-4 w-px bg-slate-700/50 mx-1" />
-
-              <div className="min-w-0">
-                <h2 className="text-sm font-bold truncate max-w-md font-serif">
-                  {selectedBookmark.title}
-                </h2>
-                <div className="flex items-center gap-2 text-[11px] opacity-60 font-mono">
-                  <span>{selectedBookmark.domain}</span>
-                  <span>·</span>
-                  <span>{getReadingStats(selectedBookmark.content_raw).chars} 字</span>
-                  <span>·</span>
-                  <span>预计阅读 {getReadingStats(selectedBookmark.content_raw).minutes} 分钟</span>
-                </div>
-              </div>
             </div>
-
-            {/* 中右部：字号、主题、分屏笔记 */}
-            <div className="flex items-center gap-3">
-              {/* 字号调节 */}
-              <div className={`flex items-center border rounded-lg px-2 py-1 text-xs gap-1.5 ${READER_THEMES[readerTheme].border}`}>
-                <Type className="w-3.5 h-3.5 opacity-60" />
+            <form onSubmit={handleCreateCategory} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">分类名称</label>
+                <input
+                  type="text"
+                  placeholder="如: 云原生与架构 / 游戏开发"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  autoFocus
+                  required
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
                 <button
-                  onClick={() => setReaderFontSize(s => Math.max(12, s - 1))}
-                  className="px-1 font-bold hover:text-blue-400 transition"
-                  title="缩小字号"
+                  type="button"
+                  onClick={() => setIsCreateCatOpen(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition"
                 >
-                  A-
+                  取消
                 </button>
-                <span className="font-mono text-xs opacity-75">{readerFontSize}px</span>
                 <button
-                  onClick={() => setReaderFontSize(s => Math.min(26, s + 1))}
-                  className="px-1 font-bold hover:text-blue-400 transition"
-                  title="放大字号"
+                  type="submit"
+                  disabled={!newCatName.trim()}
+                  className="px-4 py-1.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition disabled:opacity-50"
                 >
-                  A+
+                  创建
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-              {/* 三套经典阅读主题 */}
-              <div className={`flex items-center gap-1.5 border rounded-lg p-1 ${READER_THEMES[readerTheme].border}`}>
-                <button
-                  onClick={() => setReaderTheme('dark')}
-                  className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition ${
-                    readerTheme === 'dark' ? 'bg-blue-600 text-white font-medium' : 'hover:opacity-75'
-                  }`}
-                >
-                  <Moon className="w-3 h-3" />
-                  <span>深空</span>
-                </button>
-                <button
-                  onClick={() => setReaderTheme('sepia')}
-                  className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition ${
-                    readerTheme === 'sepia' ? 'bg-amber-600 text-white font-medium' : 'hover:opacity-75'
-                  }`}
-                >
-                  <Coffee className="w-3 h-3" />
-                  <span>暖沙</span>
-                </button>
-                <button
-                  onClick={() => setReaderTheme('midnight')}
-                  className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition ${
-                    readerTheme === 'midnight' ? 'bg-neutral-800 text-white font-medium' : 'hover:opacity-75'
-                  }`}
-                >
-                  <div className="w-2.5 h-2.5 rounded-full bg-black border border-white/50" />
-                  <span>极黑</span>
-                </button>
-              </div>
-
-              {/* 分屏笔记切换开关 */}
-              <button
-                onClick={() => setIsSplitNoteOpen(prev => !prev)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition ${
-                  isSplitNoteOpen
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                    : `${READER_THEMES[readerTheme].border} hover:opacity-80`
-                }`}
-                title="切换左右分屏边读边记笔记"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>随堂笔记 {isSplitNoteOpen ? '已开启' : '已收起'}</span>
+      {/* 重命名大类弹窗 */}
+      {catAction.type === 'rename' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-slate-700/80 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-blue-400" />
+                <span>重命名大类</span>
+              </h3>
+              <button onClick={() => setCatAction({ type: null, catName: '' })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
               </button>
-
-              <a
-                href={selectedBookmark.url}
-                target="_blank"
-                rel="noreferrer"
-                className={`p-2 rounded-lg border hover:opacity-80 transition ${READER_THEMES[readerTheme].border}`}
-                title="在浏览器中查看原网页"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
             </div>
-          </header>
-
-          {/* 主体双栏 / 单栏区域 */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* 左侧：文章沉浸式阅读正文 */}
-            <div 
-              className="flex-1 overflow-y-auto px-6 py-10 relative select-text"
-              onMouseUp={() => {
-                const sel = window.getSelection();
-                const t = sel ? sel.toString().trim() : '';
-                if (t.length > 2) setSelectedText(t);
-              }}
-            >
-              <div className="max-w-3xl mx-auto">
-                {/* 划线工具条 */}
-                {selectedText && (
-                  <div className="sticky top-2 z-20 mb-6 p-2 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl flex items-center justify-between text-xs animate-in fade-in">
-                    <span className="text-slate-300 truncate max-w-sm italic mr-2">
-                      "{selectedText}"
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => handleAddHighlight(selectedText, 'yellow')}
-                        className="px-2.5 py-1 rounded bg-amber-400 text-slate-950 font-medium text-xs hover:bg-amber-300 transition"
-                      >
-                        🟡 划线
-                      </button>
-                      <button
-                        onClick={() => handleAddHighlight(selectedText, 'green')}
-                        className="px-2.5 py-1 rounded bg-emerald-400 text-slate-950 font-medium text-xs hover:bg-emerald-300 transition"
-                      >
-                        🟢 重点
-                      </button>
-                      <button
-                        onClick={() => handleAddHighlight(selectedText, 'purple')}
-                        className="px-2.5 py-1 rounded bg-purple-400 text-slate-950 font-medium text-xs hover:bg-purple-300 transition"
-                      >
-                        🟣 批注
-                      </button>
-                      <button
-                        onClick={() => {
-                          insertNoteTemplate(`> ${selectedText}\n\n我的想法：`);
-                          setSelectedText('');
-                          setIsSplitNoteOpen(true);
-                        }}
-                        className="px-2.5 py-1 rounded bg-blue-600 text-white font-medium text-xs hover:bg-blue-500 transition"
-                      >
-                        📝 记入随堂笔记
-                      </button>
-                      <button
-                        onClick={() => setSelectedText('')}
-                        className="p-1 hover:text-slate-400"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* 文章标题及元数据 */}
-                <div className="mb-8 pb-6 border-b border-slate-800/60">
-                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight font-serif">
-                    {selectedBookmark.title}
-                  </h1>
-                  <div className="flex flex-wrap items-center gap-3 mt-4 text-xs opacity-60">
-                    <span>来源: {selectedBookmark.domain}</span>
-                    <span>·</span>
-                    <span className="break-all">{selectedBookmark.url}</span>
-                  </div>
-                  {selectedBookmark.ai_summary && (
-                    <div className="mt-4 p-4 rounded-xl bg-blue-950/20 border border-blue-900/30 text-xs text-blue-200/90 leading-relaxed font-sans">
-                      <span className="font-semibold text-blue-400 mr-1.5">💡 AI 导读摘要:</span>
-                      {selectedBookmark.ai_summary}
-                    </div>
-                  )}
-                </div>
-
-                {/* 文章段落 */}
-                <div className="prose max-w-none">
-                  {renderParagraphs(
-                    selectedBookmark.content_raw,
-                    getHighlights(selectedBookmark),
-                    readerTheme,
-                    readerFontSize
-                  )}
-                </div>
-
-                {/* 文章末尾：高亮与书签备注汇总 */}
-                {getHighlights(selectedBookmark).length > 0 && (
-                  <div className="mt-12 pt-6 border-t border-slate-800/60">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="font-bold text-sm flex items-center gap-1.5">
-                        <Highlighter className="w-4 h-4 text-amber-400" />
-                        <span>全篇划线高亮 ({getHighlights(selectedBookmark).length})</span>
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {getHighlights(selectedBookmark).map(hl => (
-                        <div key={hl.id} className="p-3 rounded-lg border text-xs flex items-start justify-between gap-3 bg-slate-900/30 border-slate-800/60">
-                          <div className="flex-1">
-                            <p className="leading-relaxed italic">"{hl.text}"</p>
-                            <span className="text-[10px] opacity-50 mt-1 block font-mono">{hl.created_at}</span>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteHighlight(hl.id)}
-                            className="opacity-50 hover:opacity-100 hover:text-red-400 p-1"
-                            title="删除此划线"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  原名称: <span className="text-white font-semibold">{catAction.catName}</span>
+                </label>
+                <input
+                  type="text"
+                  value={catAction.newName || ''}
+                  onChange={(e) => setCatAction(prev => ({ ...prev, newName: e.target.value }))}
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCatAction({ type: null, catName: '' })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRenameCategory}
+                  disabled={!catAction.newName?.trim()}
+                  className="px-4 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium"
+                >
+                  保存更新
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* 右侧：分屏随堂笔记编辑器 */}
-            {isSplitNoteOpen && (
-              <div className={`w-96 border-l flex flex-col h-full shrink-0 select-none ${READER_THEMES[readerTheme].border} ${READER_THEMES[readerTheme].cardBg}`}>
-                <div className={`h-11 px-4 border-b flex items-center justify-between text-xs shrink-0 ${READER_THEMES[readerTheme].border}`}>
-                  <div className="flex items-center gap-1.5 font-semibold">
-                    <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                    <span>边读边记 · 私人笔记</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] opacity-60 font-mono">
-                      {noteSaveStatus === 'saving' ? '正在保存...' : noteSaveStatus === 'saved' ? '已自动保存' : ''}
-                    </span>
-                    <button
-                      onClick={() => setIsSplitNoteOpen(false)}
-                      className="opacity-60 hover:opacity-100"
-                      title="收起分屏笔记"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+      {/* 合并大类弹窗 */}
+      {catAction.type === 'merge' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-slate-700/80 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <ArrowRight className="w-4 h-4 text-amber-400" />
+                <span>合并大类</span>
+              </h3>
+              <button onClick={() => setCatAction({ type: null, catName: '' })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                将分类 <span className="text-amber-400 font-semibold">{catAction.catName}</span> 下的所有书签与站点合并转移到目标分类中：
+              </p>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">选择目标分类</label>
+                <select
+                  value={catAction.targetCat || ''}
+                  onChange={(e) => setCatAction(prev => ({ ...prev, targetCat: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  {hierarchies.filter(h => h.name !== catAction.catName).map(h => (
+                    <option key={h.name} value={h.name}>{h.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCatAction({ type: null, catName: '' })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMergeCategory}
+                  disabled={!catAction.targetCat}
+                  className="px-4 py-1.5 rounded-lg text-xs bg-amber-600 hover:bg-amber-500 text-white font-medium"
+                >
+                  确认合并
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-                <div className="p-2 border-b border-slate-800/40 flex items-center gap-1.5 flex-wrap shrink-0">
-                  <span className="text-[10px] opacity-50 px-1">模板:</span>
-                  <button
-                    onClick={() => insertNoteTemplate("### 📌 关键收获\n- \n- ")}
-                    className="px-2 py-0.5 rounded text-[10px] bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition"
-                  >
-                    + 关键收获
-                  </button>
-                  <button
-                    onClick={() => insertNoteTemplate("### ❓ 疑问与待查\n- ")}
-                    className="px-2 py-0.5 rounded text-[10px] bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition"
-                  >
-                    + 疑问待查
-                  </button>
-                  <button
-                    onClick={() => insertNoteTemplate("### 💡 行动想法\n- ")}
-                    className="px-2 py-0.5 rounded text-[10px] bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition"
-                  >
-                    + 行动想法
-                  </button>
-                </div>
-
-                <div className="flex-1 p-3 flex flex-col">
-                  <textarea
-                    value={noteText}
-                    onChange={(e) => handleNoteChange(e.target.value)}
-                    placeholder="边阅读边随手记录思考、批注或下一步行动... (Markdown 支持，自动存至本地 SQLite 数据库)"
-                    className={`w-full flex-1 p-3 rounded-lg border resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans text-xs leading-relaxed ${READER_THEMES[readerTheme].border} ${READER_THEMES[readerTheme].bg} ${READER_THEMES[readerTheme].text}`}
+      {/* 删除大类确认弹窗 */}
+      {catAction.type === 'delete' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-red-900/60 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-red-400 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                <span>删除分类: {catAction.catName}</span>
+              </h3>
+              <button onClick={() => setCatAction({ type: null, catName: '' })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-300">请选择删除方式：</p>
+              <div className="space-y-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="delCatMode"
+                    checked={!catAction.deleteBookmarks}
+                    onChange={() => setCatAction(prev => ({ ...prev, deleteBookmarks: false }))}
+                    className="mt-0.5 text-blue-600"
                   />
-                  <div className="flex items-center justify-between text-[10px] opacity-50 pt-2 shrink-0">
-                    <span>{noteText.length} 字</span>
-                    <span>支持实时自动落盘</span>
+                  <div>
+                    <span className="font-semibold text-white">仅解绑分类 (推荐)</span>
+                    <p className="text-[11px] text-slate-400">保留所有书签，移至「未分类」中，防止误删收藏。</p>
                   </div>
-                </div>
+                </label>
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-800/80">
+                  <input
+                    type="radio"
+                    name="delCatMode"
+                    checked={!!catAction.deleteBookmarks}
+                    onChange={() => setCatAction(prev => ({ ...prev, deleteBookmarks: true }))}
+                    className="mt-0.5 text-red-600"
+                  />
+                  <div>
+                    <span className="font-semibold text-red-400">彻底删除书签</span>
+                    <p className="text-[11px] text-slate-400">连同该分类下的所有书签彻底从数据库删除。</p>
+                  </div>
+                </label>
               </div>
-            )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCatAction({ type: null, catName: '' })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteCategory}
+                  className="px-4 py-1.5 rounded-lg text-xs bg-red-600 hover:bg-red-500 text-white font-medium"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 转移二级站点到其他大类 */}
+      {subAction.type === 'move' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-slate-700/80 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <ArrowRight className="w-4 h-4 text-blue-400" />
+                <span>转移站点到其他大类</span>
+              </h3>
+              <button onClick={() => setSubAction({ type: null, catName: '', domain: '', subName: '' })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                将站点 <span className="text-blue-400 font-semibold">{subAction.subName || subAction.domain}</span> ({subAction.domain}) 下的所有书签转移到新大类：
+              </p>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">选择目标大类</label>
+                <select
+                  value={subAction.targetCat || ''}
+                  onChange={(e) => setSubAction(prev => ({ ...prev, targetCat: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  {hierarchies.map(h => (
+                    <option key={h.name} value={h.name}>{h.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSubAction({ type: null, catName: '', domain: '', subName: '' })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMoveSubCategory}
+                  disabled={!subAction.targetCat}
+                  className="px-4 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium"
+                >
+                  确认转移
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 重命名二级站点显示别名 */}
+      {subAction.type === 'rename' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-slate-700/80 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-blue-400" />
+                <span>修改站点显示别名</span>
+              </h3>
+              <button onClick={() => setSubAction({ type: null, catName: '', domain: '', subName: '' })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  域名: <span className="font-mono text-white">{subAction.domain}</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="如: 季然技术博客 / Storyset 插画"
+                  value={subAction.newName || ''}
+                  onChange={(e) => setSubAction(prev => ({ ...prev, newName: e.target.value }))}
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSubAction({ type: null, catName: '', domain: '', subName: '' })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRenameSubCategory}
+                  disabled={!subAction.newName?.trim()}
+                  className="px-4 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium"
+                >
+                  保存别名
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 删除二级站点书签 */}
+      {subAction.type === 'delete' && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#131926] border border-red-900/60 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-red-400 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                <span>删除站点书签: {subAction.subName || subAction.domain}</span>
+              </h3>
+              <button onClick={() => setSubAction({ type: null, catName: '', domain: '', subName: '' })} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-300">
+                确定要删除站点 <span className="text-white font-semibold">{subAction.domain}</span> 下的所有书签吗？
+              </p>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSubAction({ type: null, catName: '', domain: '', subName: '' })}
+                  className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteSubCategory}
+                  className="px-4 py-1.5 rounded-lg text-xs bg-red-600 hover:bg-red-500 text-white font-medium"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2044,8 +2013,8 @@ export default function App() {
                             </span>
                           )}
                           {task.category && (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800 text-blue-300 shrink-0 font-medium">
-                              <span>{CATEGORY_ICONS[task.category] || '📁'}</span>
+                            <span className="inline-flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800 text-blue-300 shrink-0 font-medium">
+                              {getCategoryTechIcon(task.category, 11)}
                               <span>{task.category}</span>
                             </span>
                           )}

@@ -10,8 +10,20 @@ export function AnalyzeBookmark(arg1) {
   return window['go']['main']['App']['AnalyzeBookmark'](arg1);
 }
 
+export function CreateCategory(arg1) {
+  return window['go']['main']['App']['CreateCategory'](arg1);
+}
+
 export function DeleteBookmark(arg1) {
   return window['go']['main']['App']['DeleteBookmark'](arg1);
+}
+
+export function DeleteCategory(arg1, arg2) {
+  return window['go']['main']['App']['DeleteCategory'](arg1, arg2);
+}
+
+export function DeleteSubCategory(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DeleteSubCategory'](arg1, arg2, arg3);
 }
 
 export function ExportArcBookmarks() {
@@ -66,6 +78,22 @@ export function ImportFromArc() {
   return window['go']['main']['App']['ImportFromArc']();
 }
 
+export function MergeCategories(arg1, arg2) {
+  return window['go']['main']['App']['MergeCategories'](arg1, arg2);
+}
+
+export function MoveSubCategory(arg1, arg2) {
+  return window['go']['main']['App']['MoveSubCategory'](arg1, arg2);
+}
+
+export function RenameCategory(arg1, arg2) {
+  return window['go']['main']['App']['RenameCategory'](arg1, arg2);
+}
+
+export function RenameSubCategory(arg1, arg2) {
+  return window['go']['main']['App']['RenameSubCategory'](arg1, arg2);
+}
+
 export function ResetAndReanalyzeAll() {
   return window['go']['main']['App']['ResetAndReanalyzeAll']();
 }
@@ -90,10 +118,18 @@ export function ToggleFavorite(arg1) {
   return window['go']['main']['App']['ToggleFavorite'](arg1);
 }
 
+export function UpdateBookmarkCategory(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateBookmarkCategory'](arg1, arg2, arg3);
+}
+
 export function UpdateBookmarkHighlights(arg1, arg2) {
   return window['go']['main']['App']['UpdateBookmarkHighlights'](arg1, arg2);
 }
 
 export function UpdateBookmarkNotes(arg1, arg2) {
   return window['go']['main']['App']['UpdateBookmarkNotes'](arg1, arg2);
+}
+
+export function UpdateBookmarkTags(arg1, arg2) {
+  return window['go']['main']['App']['UpdateBookmarkTags'](arg1, arg2);
 }

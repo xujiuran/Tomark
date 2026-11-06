@@ -551,3 +551,75 @@ func (a *App) ResetAndReanalyzeAll() (*models.AnalysisProgress, error) {
 	}
 	return a.StartBatchAIAnalysis()
 }
+
+// CreateCategory adds a new user-defined category.
+func (a *App) CreateCategory(name string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.CreateCategory(name)
+}
+
+// RenameCategory updates an existing category name.
+func (a *App) RenameCategory(oldName, newName string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.RenameCategory(oldName, newName)
+}
+
+// MergeCategories merges source category into target category.
+func (a *App) MergeCategories(sourceCat, targetCat string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.MergeCategories(sourceCat, targetCat)
+}
+
+// DeleteCategory deletes or unassigns a category.
+func (a *App) DeleteCategory(category string, deleteBookmarks bool) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.DeleteCategory(category, deleteBookmarks)
+}
+
+// MoveSubCategory moves all bookmarks of a domain to a target category.
+func (a *App) MoveSubCategory(domain, targetCategory string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.MoveSubCategory(domain, targetCategory)
+}
+
+// RenameSubCategory renames the display alias for a domain.
+func (a *App) RenameSubCategory(domain, newDisplayName string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.RenameSubCategory(domain, newDisplayName)
+}
+
+// DeleteSubCategory deletes or unassigns bookmarks under a domain.
+func (a *App) DeleteSubCategory(category, domain string, deleteBookmarks bool) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.DeleteSubCategory(category, domain, deleteBookmarks)
+}
+
+// UpdateBookmarkCategory updates category and sub_category for a single bookmark.
+func (a *App) UpdateBookmarkCategory(bookmarkID, category, subCategory string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.UpdateBookmarkCategory(bookmarkID, category, subCategory)
+}
+
+// UpdateBookmarkTags updates tags for a bookmark.
+func (a *App) UpdateBookmarkTags(bookmarkID string, tags []string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.db.UpdateBookmarkTags(bookmarkID, tags)
+}

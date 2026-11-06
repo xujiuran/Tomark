@@ -779,11 +779,268 @@ func (d *DB) GetCategoryHierarchy() ([]*models.CategoryHierarchy, error) {
 		})
 	}
 
+	// Also append any empty custom categories from settings
+	var customCats []string
+	val := ""
+	_ = d.conn.QueryRow("SELECT value FROM app_settings WHERE key = 'custom_categories'").Scan(&val)
+	if val != "" {
+		_ = json.Unmarshal([]byte(val), &customCats)
+		for _, cc := range customCats {
+			if _, exists := catMap[cc]; !exists {
+				catMap[cc] = &models.CategoryHierarchy{
+					Name:          cc,
+					Count:         0,
+					SubCategories: []*models.SubCategoryCount{},
+				}
+				catOrder = append(catOrder, cc)
+			}
+		}
+	}
+
 	result := make([]*models.CategoryHierarchy, 0, len(catOrder))
 	for _, cName := range catOrder {
 		result = append(result, catMap[cName])
 	}
 	return result, nil
+}
+
+// RenameCategory updates all bookmarks with the old category name to the new name.
+func (d *DB) RenameCategory(oldName, newName string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+	if oldName == "" || newName == "" {
+		return fmt.Errorf("分类名称不能为空")
+	}
+
+	_, err := d.conn.Exec("UPDATE bookmarks SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE category = ?", newName, oldName)
+	if err != nil {
+		return err
+	}
+
+	// Update custom_categories in settings if present
+	var customCats []string
+	val := ""
+	_ = d.conn.QueryRow("SELECT value FROM app_settings WHERE key = 'custom_categories'").Scan(&val)
+	if val != "" {
+		_ = json.Unmarshal([]byte(val), &customCats)
+		changed := false
+		for i, c := range customCats {
+			if c == oldName {
+				customCats[i] = newName
+				changed = true
+			}
+		}
+		if changed {
+			bytes, _ := json.Marshal(customCats)
+			_, _ = d.conn.Exec("INSERT INTO app_settings (key, value) VALUES ('custom_categories', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", string(bytes))
+		}
+	}
+	return nil
+}
+
+// MergeCategories moves all bookmarks from source category into target category.
+func (d *DB) MergeCategories(sourceCat, targetCat string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	sourceCat = strings.TrimSpace(sourceCat)
+	targetCat = strings.TrimSpace(targetCat)
+	if sourceCat == "" || targetCat == "" {
+		return fmt.Errorf("源分类与目标分类不能为空")
+	}
+	if sourceCat == targetCat {
+		return nil
+	}
+
+	_, err := d.conn.Exec("UPDATE bookmarks SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE category = ?", targetCat, sourceCat)
+	if err != nil {
+		return err
+	}
+
+	// Remove sourceCat from custom_categories
+	var customCats []string
+	val := ""
+	_ = d.conn.QueryRow("SELECT value FROM app_settings WHERE key = 'custom_categories'").Scan(&val)
+	if val != "" {
+		_ = json.Unmarshal([]byte(val), &customCats)
+		var filtered []string
+		for _, c := range customCats {
+			if c != sourceCat {
+				filtered = append(filtered, c)
+			}
+		}
+		bytes, _ := json.Marshal(filtered)
+		_, _ = d.conn.Exec("INSERT INTO app_settings (key, value) VALUES ('custom_categories', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", string(bytes))
+	}
+	return nil
+}
+
+// DeleteCategory deletes or clears the category on all bookmarks.
+func (d *DB) DeleteCategory(category string, deleteBookmarks bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	category = strings.TrimSpace(category)
+	if category == "" {
+		return fmt.Errorf("分类名称不能为空")
+	}
+
+	if deleteBookmarks {
+		_, err := d.conn.Exec("DELETE FROM bookmarks WHERE category = ?", category)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := d.conn.Exec("UPDATE bookmarks SET category = '', updated_at = CURRENT_TIMESTAMP WHERE category = ?", category)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Remove from custom_categories
+	var customCats []string
+	val := ""
+	_ = d.conn.QueryRow("SELECT value FROM app_settings WHERE key = 'custom_categories'").Scan(&val)
+	if val != "" {
+		_ = json.Unmarshal([]byte(val), &customCats)
+		var filtered []string
+		for _, c := range customCats {
+			if c != category {
+				filtered = append(filtered, c)
+			}
+		}
+		bytes, _ := json.Marshal(filtered)
+		_, _ = d.conn.Exec("INSERT INTO app_settings (key, value) VALUES ('custom_categories', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", string(bytes))
+	}
+	return nil
+}
+
+// MoveSubCategory moves all bookmarks of a domain to a new category.
+func (d *DB) MoveSubCategory(domain, targetCategory string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	domain = strings.TrimSpace(domain)
+	targetCategory = strings.TrimSpace(targetCategory)
+	if domain == "" || targetCategory == "" {
+		return fmt.Errorf("域名与目标分类不能为空")
+	}
+
+	_, err := d.conn.Exec("UPDATE bookmarks SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE domain = ?", targetCategory, domain)
+	return err
+}
+
+// RenameSubCategory updates the sub_category display name for bookmarks under a domain.
+func (d *DB) RenameSubCategory(domain, newDisplayName string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	domain = strings.TrimSpace(domain)
+	newDisplayName = strings.TrimSpace(newDisplayName)
+	if domain == "" || newDisplayName == "" {
+		return fmt.Errorf("域名与显示名称不能为空")
+	}
+
+	_, err := d.conn.Exec("UPDATE bookmarks SET sub_category = ?, updated_at = CURRENT_TIMESTAMP WHERE domain = ?", newDisplayName, domain)
+	return err
+}
+
+// DeleteSubCategory deletes or clears bookmarks for a specific domain within a category.
+func (d *DB) DeleteSubCategory(category, domain string, deleteBookmarks bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	domain = strings.TrimSpace(domain)
+	category = strings.TrimSpace(category)
+	if domain == "" {
+		return fmt.Errorf("域名不能为空")
+	}
+
+	if deleteBookmarks {
+		if category != "" {
+			_, err := d.conn.Exec("DELETE FROM bookmarks WHERE domain = ? AND category = ?", domain, category)
+			return err
+		}
+		_, err := d.conn.Exec("DELETE FROM bookmarks WHERE domain = ?", domain)
+		return err
+	}
+
+	if category != "" {
+		_, err := d.conn.Exec("UPDATE bookmarks SET category = '', sub_category = '', updated_at = CURRENT_TIMESTAMP WHERE domain = ? AND category = ?", domain, category)
+		return err
+	}
+	_, err := d.conn.Exec("UPDATE bookmarks SET category = '', sub_category = '', updated_at = CURRENT_TIMESTAMP WHERE domain = ?", domain)
+	return err
+}
+
+// UpdateBookmarkCategory updates category and sub_category for a single bookmark.
+func (d *DB) UpdateBookmarkCategory(bookmarkID, category, subCategory string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	bookmarkID = strings.TrimSpace(bookmarkID)
+	category = strings.TrimSpace(category)
+	subCategory = strings.TrimSpace(subCategory)
+
+	_, err := d.conn.Exec("UPDATE bookmarks SET category = ?, sub_category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", category, subCategory, bookmarkID)
+	return err
+}
+
+// UpdateBookmarkTags updates tags for a single bookmark.
+func (d *DB) UpdateBookmarkTags(bookmarkID string, tags []string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	_, err := d.conn.Exec("DELETE FROM bookmark_tags WHERE bookmark_id = ?", bookmarkID)
+	if err != nil {
+		return err
+	}
+
+	for _, tName := range tags {
+		tName = strings.TrimSpace(tName)
+		if tName == "" {
+			continue
+		}
+		var tagID string
+		err := d.conn.QueryRow("SELECT id FROM tags WHERE name = ?", tName).Scan(&tagID)
+		if err != nil {
+			tagID = uuid.New().String()
+			_, _ = d.conn.Exec("INSERT INTO tags (id, name) VALUES (?, ?)", tagID, tName)
+		}
+		_, _ = d.conn.Exec("INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)", bookmarkID, tagID)
+	}
+	return nil
+}
+
+// CreateCategory adds a new custom category.
+func (d *DB) CreateCategory(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("分类名称不能为空")
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	var customCats []string
+	val := ""
+	_ = d.conn.QueryRow("SELECT value FROM app_settings WHERE key = 'custom_categories'").Scan(&val)
+	if val != "" {
+		_ = json.Unmarshal([]byte(val), &customCats)
+	}
+
+	for _, c := range customCats {
+		if c == name {
+			return nil
+		}
+	}
+	customCats = append(customCats, name)
+	bytes, _ := json.Marshal(customCats)
+	_, err := d.conn.Exec("INSERT INTO app_settings (key, value) VALUES ('custom_categories', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", string(bytes))
+	return err
 }
 
 // GetCategories returns all categories with their bookmark count.
