@@ -550,6 +550,58 @@ func (d *DB) GetBookmarkByID(id string) (*models.Bookmark, error) {
 	return &b, nil
 }
 
+// GetBookmarksByIDs fetches a list of bookmarks by their IDs.
+func (d *DB) GetBookmarksByIDs(ids []string) ([]*models.Bookmark, error) {
+	if len(ids) == 0 {
+		return []*models.Bookmark{}, nil
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, url, title, description, category, sub_category, domain, favicon_url, cover_image,
+		       content_raw, ai_summary, ai_key_points, status_code,
+		       is_archived, is_favorite, created_at, updated_at
+		FROM bookmarks
+		WHERE id IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	rows, err := d.conn.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*models.Bookmark
+	for rows.Next() {
+		var b models.Bookmark
+		var keyPointsStr string
+		var isArch, isFav int
+		if err := rows.Scan(
+			&b.ID, &b.URL, &b.Title, &b.Description, &b.Category, &b.SubCategory, &b.Domain, &b.FaviconURL, &b.CoverImage,
+			&b.ContentRaw, &b.AISummary, &keyPointsStr, &b.StatusCode,
+			&isArch, &isFav, &b.CreatedAt, &b.UpdatedAt,
+		); err != nil {
+			continue
+		}
+		b.IsArchived = (isArch == 1)
+		b.IsFavorite = (isFav == 1)
+		if keyPointsStr != "" {
+			_ = json.Unmarshal([]byte(keyPointsStr), &b.AIKeyPoints)
+		}
+		list = append(list, &b)
+	}
+
+	return list, nil
+}
+
 // UpdateBookmarkAI updates AI analysis fields, records canonical domain category, and synchronizes all same-domain bookmarks.
 func (d *DB) UpdateBookmarkAI(id, summary, category string, keyPoints, tags []string) error {
 	d.mu.Lock()

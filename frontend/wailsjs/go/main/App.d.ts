@@ -8,6 +8,8 @@ export function AnalyzeBookmark(arg1:string):Promise<models.AISummaryResult>;
 
 export function BatchAddTags(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
+export function BatchAnalyzeBookmarks(arg1:Array<string>):Promise<models.AnalysisProgress>;
+
 export function BatchDeleteBookmarks(arg1:Array<string>):Promise<void>;
 
 export function BatchRemoveTag(arg1:Array<string>,arg2:string):Promise<void>;
@@ -61,6 +63,10 @@ export function RenameCategory(arg1:string,arg2:string):Promise<void>;
 export function RenameSubCategory(arg1:string,arg2:string):Promise<void>;
 
 export function ResetAndReanalyzeAll():Promise<models.AnalysisProgress>;
+
+export function RetryFailedAIAnalysis():Promise<models.AnalysisProgress>;
+
+export function RetrySingleAITask(arg1:string):Promise<models.AnalysisProgress>;
 
 export function SaveAIConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
 

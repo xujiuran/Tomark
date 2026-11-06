@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Star, Archive, Trash2, ExternalLink, 
+import {
+  RotateCcw, Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
   CheckCircle, Globe, RefreshCw, X, FolderTree, ChevronDown, ChevronRight,
   Edit3, Check, Loader2, ArrowRight, MoreVertical, LayoutGrid, Palette, Layers,
@@ -13,6 +13,7 @@ import {
   ToggleArchive, AnalyzeBookmark, GetTags, GetCategoryHierarchy, GetStats, 
   SaveAIConfig, GetAIConfig, SelectAndImportBookmarks, 
   StartBatchAIAnalysis, GetAnalysisProgress, ResetAndReanalyzeAll,
+  RetryFailedAIAnalysis, BatchAnalyzeBookmarks, RetrySingleAITask,
   HasArcBrowser, ImportFromArc, ExportArcBookmarks,
   CreateCategory, RenameCategory, MergeCategories, DeleteCategory,
   MoveSubCategory, RenameSubCategory, DeleteSubCategory,
@@ -1619,6 +1620,29 @@ export default function App() {
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
+                  onClick={async () => {
+                    try {
+                      setIsBatchActionLoading(true);
+                      const ids = Array.from(selectedBookmarkIds);
+                      const p = await BatchAnalyzeBookmarks(ids);
+                      setAnalysisProgress(p);
+                      setIsProgressModalOpen(true);
+                    } catch (err: any) {
+                      alert("启动批量 AI 分析失败: " + (err?.message || err));
+                    } finally {
+                      setIsBatchActionLoading(false);
+                    }
+                  }}
+                  disabled={isBatchActionLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/35 text-emerald-300 border border-emerald-500/40 text-xs font-medium transition shadow-sm"
+                  title="对选中的书签批量进行 AI 智能分类与摘要"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>AI 分析</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setBatchModal({ type: 'category', targetCategory: '', subCategory: '' })}
                   disabled={isBatchActionLoading}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/25 hover:bg-blue-600/35 text-blue-300 border border-blue-500/40 text-xs font-medium transition shadow-sm"
@@ -2776,6 +2800,23 @@ export default function App() {
               <div className="flex items-center gap-2">
                 {!analysisProgress?.is_running && (
                   <>
+                    {((analysisProgress?.failed || 0) > 0 || (analysisProgress?.tasks || []).some(t => t.status === 'failed')) && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const p = await RetryFailedAIAnalysis();
+                            setAnalysisProgress(p);
+                          } catch (err: any) {
+                            alert("重试失败: " + (err?.message || err));
+                          }
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition shadow-sm"
+                        title="重新分析所有失败或未完成的任务"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>批量重试失败项 ({analysisProgress?.failed || (analysisProgress?.tasks || []).filter(t => t.status === 'failed').length})</span>
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         const p = await StartBatchAIAnalysis();
@@ -2912,16 +2953,36 @@ export default function App() {
                         <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{task.url}</p>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          const bm = bookmarks.find(b => b.id === task.bookmark_id);
-                          if (bm) setSelectedBookmark(bm);
-                          setIsProgressModalOpen(false);
-                        }}
-                        className="text-[11px] text-blue-400 hover:text-blue-300 transition shrink-0 underline"
-                      >
-                        在列表查看
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {task.status === 'failed' && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const p = await RetrySingleAITask(task.bookmark_id);
+                                setAnalysisProgress(p);
+                              } catch (err: any) {
+                                alert("重试失败: " + (err?.message || err));
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/60 hover:bg-amber-900/80 border border-amber-700/60 text-amber-300 hover:text-white text-[11px] font-medium transition"
+                            title="单独重试此书签的 AI 分析"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>重试</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            const bm = bookmarks.find(b => b.id === task.bookmark_id);
+                            if (bm) setSelectedBookmark(bm);
+                            setIsProgressModalOpen(false);
+                          }}
+                          className="text-[11px] text-blue-400 hover:text-blue-300 transition shrink-0 underline"
+                        >
+                          在列表查看
+                        </button>
+                      </div>
                     </div>
 
                     {/* AI 结果预览 */}

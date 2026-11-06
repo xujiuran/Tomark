@@ -14,6 +14,10 @@ export function BatchAddTags(arg1, arg2) {
   return window['go']['main']['App']['BatchAddTags'](arg1, arg2);
 }
 
+export function BatchAnalyzeBookmarks(arg1) {
+  return window['go']['main']['App']['BatchAnalyzeBookmarks'](arg1);
+}
+
 export function BatchDeleteBookmarks(arg1) {
   return window['go']['main']['App']['BatchDeleteBookmarks'](arg1);
 }
@@ -120,6 +124,14 @@ export function RenameSubCategory(arg1, arg2) {
 
 export function ResetAndReanalyzeAll() {
   return window['go']['main']['App']['ResetAndReanalyzeAll']();
+}
+
+export function RetryFailedAIAnalysis() {
+  return window['go']['main']['App']['RetryFailedAIAnalysis']();
+}
+
+export function RetrySingleAITask(arg1) {
+  return window['go']['main']['App']['RetrySingleAITask'](arg1);
 }
 
 export function SaveAIConfig(arg1, arg2, arg3) {

@@ -390,8 +390,8 @@ func (a *App) ImportFromArc() (*models.ImportResult, error) {
 	return res, nil
 }
 
-// StartBatchAIAnalysis processes unanalyzed bookmarks in the background with local Magpie.
-func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
+// runBatchAnalysisOnBookmarks executes batch analysis queue on a slice of bookmarks.
+func (a *App) runBatchAnalysisOnBookmarks(targets []*models.Bookmark) (*models.AnalysisProgress, error) {
 	a.analysisMu.Lock()
 	if a.isAnalyzing {
 		prog := &models.AnalysisProgress{
@@ -405,6 +405,10 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 		a.analysisMu.Unlock()
 		return prog, nil
 	}
+	if len(targets) == 0 {
+		a.analysisMu.Unlock()
+		return &models.AnalysisProgress{IsRunning: false}, nil
+	}
 	a.isAnalyzing = true
 	a.analysisMu.Unlock()
 
@@ -416,27 +420,20 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 		apiKey = "magpie"
 	}
 
-	unanalyzed, err := a.db.GetUnanalyzedBookmarks(500)
-	if err != nil || len(unanalyzed) == 0 {
-		a.analysisMu.Lock()
-		a.isAnalyzing = false
-		a.analysisMu.Unlock()
-		return &models.AnalysisProgress{IsRunning: false}, nil
-	}
-
 	// Initialize task tracking
-	tasks := make([]*models.AnalysisTaskItem, len(unanalyzed))
-	for i, bm := range unanalyzed {
+	tasks := make([]*models.AnalysisTaskItem, len(targets))
+	for i, bm := range targets {
 		tasks[i] = &models.AnalysisTaskItem{
 			BookmarkID: bm.ID,
 			Title:      bm.Title,
 			URL:        bm.URL,
 			Status:     "pending",
+			UpdatedAt:  time.Now(),
 		}
 	}
 
 	a.analysisMu.Lock()
-	a.analysisTotal = len(unanalyzed)
+	a.analysisTotal = len(targets)
 	a.analysisProcessed = 0
 	a.analysisSuccess = 0
 	a.analysisFailed = 0
@@ -452,7 +449,7 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 
 		// Concurrency worker pool: 2 workers
 		sem := make(chan struct{}, 2)
-		for i, bm := range unanalyzed {
+		for i, bm := range targets {
 			taskItem := tasks[i]
 			sem <- struct{}{}
 			go func(target *models.Bookmark, item *models.AnalysisTaskItem) {
@@ -460,6 +457,7 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 
 				a.analysisMu.Lock()
 				item.Status = "processing"
+				item.UpdatedAt = time.Now()
 				a.analysisMu.Unlock()
 
 				content := target.ContentRaw
@@ -491,12 +489,15 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 					item.Category = res.Category
 					item.Summary = res.Summary
 					item.Tags = res.SuggestedTags
+					item.Error = ""
+					item.UpdatedAt = time.Now()
 					a.analysisSuccess++
 				} else {
 					item.Status = "failed"
 					if err != nil {
 						item.Error = err.Error()
 					}
+					item.UpdatedAt = time.Now()
 					a.analysisFailed++
 				}
 				a.analysisProcessed++
@@ -511,13 +512,109 @@ func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
 	}()
 
 	return &models.AnalysisProgress{
-		Total:     len(unanalyzed),
+		Total:     len(targets),
 		Processed: 0,
 		Success:   0,
 		Failed:    0,
 		IsRunning: true,
 		Tasks:     tasks,
 	}, nil
+}
+
+// StartBatchAIAnalysis processes unanalyzed bookmarks in the background with local Magpie.
+func (a *App) StartBatchAIAnalysis() (*models.AnalysisProgress, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	unanalyzed, err := a.db.GetUnanalyzedBookmarks(500)
+	if err != nil || len(unanalyzed) == 0 {
+		return &models.AnalysisProgress{IsRunning: false}, nil
+	}
+	return a.runBatchAnalysisOnBookmarks(unanalyzed)
+}
+
+// RetryFailedAIAnalysis retrieves all bookmarks that failed in previous batches or are unanalyzed, and restarts batch analysis on them.
+func (a *App) RetryFailedAIAnalysis() (*models.AnalysisProgress, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	a.analysisMu.Lock()
+	if a.isAnalyzing {
+		prog := &models.AnalysisProgress{
+			Total:     a.analysisTotal,
+			Processed: a.analysisProcessed,
+			Success:   a.analysisSuccess,
+			Failed:    a.analysisFailed,
+			IsRunning: true,
+			Tasks:     a.analysisTasks,
+		}
+		a.analysisMu.Unlock()
+		return prog, nil
+	}
+
+	// 1. Collect failed IDs from current in-memory tasks
+	failedIDMap := make(map[string]bool)
+	for _, task := range a.analysisTasks {
+		if task.Status == "failed" {
+			failedIDMap[task.BookmarkID] = true
+		}
+	}
+	a.analysisMu.Unlock()
+
+	// 2. Also retrieve unanalyzed bookmarks from DB
+	unanalyzed, err := a.db.GetUnanalyzedBookmarks(500)
+	if err == nil {
+		for _, bm := range unanalyzed {
+			failedIDMap[bm.ID] = true
+		}
+	}
+
+	if len(failedIDMap) == 0 {
+		return &models.AnalysisProgress{IsRunning: false, Total: 0}, nil
+	}
+
+	var ids []string
+	for id := range failedIDMap {
+		ids = append(ids, id)
+	}
+
+	bookmarks, err := a.db.GetBookmarksByIDs(ids)
+	if err != nil || len(bookmarks) == 0 {
+		return &models.AnalysisProgress{IsRunning: false, Total: 0}, nil
+	}
+
+	return a.runBatchAnalysisOnBookmarks(bookmarks)
+}
+
+// BatchAnalyzeBookmarks runs AI analysis on an explicit list of bookmark IDs (e.g. from batch selection).
+func (a *App) BatchAnalyzeBookmarks(ids []string) (*models.AnalysisProgress, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if len(ids) == 0 {
+		return &models.AnalysisProgress{IsRunning: false, Total: 0}, nil
+	}
+
+	bookmarks, err := a.db.GetBookmarksByIDs(ids)
+	if err != nil || len(bookmarks) == 0 {
+		return &models.AnalysisProgress{IsRunning: false, Total: 0}, nil
+	}
+
+	return a.runBatchAnalysisOnBookmarks(bookmarks)
+}
+
+// RetrySingleAITask retries AI analysis on a single bookmark and updates task status.
+func (a *App) RetrySingleAITask(bookmarkID string) (*models.AnalysisProgress, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	bm, err := a.db.GetBookmarkByID(bookmarkID)
+	if err != nil || bm == nil {
+		return nil, fmt.Errorf("bookmark not found: %s", bookmarkID)
+	}
+
+	return a.runBatchAnalysisOnBookmarks([]*models.Bookmark{bm})
 }
 
 // GetAnalysisProgress returns current background AI analysis status and all task results.
