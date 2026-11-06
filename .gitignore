@@ -1,0 +1,28 @@
+# Binaries & build artifacts
+build/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.app/
+*.dmg
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+.vite/
+
+# Database & local data
+*.db
+*.db-journal
+*.sqlite
+.linkit/
+
+# IDE & OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
