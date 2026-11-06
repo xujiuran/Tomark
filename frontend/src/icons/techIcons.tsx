@@ -7,8 +7,8 @@ export interface TechIconProps extends React.SVGProps<SVGSVGElement> {
 }
 
 /**
- * 1. QuantumLogoIcon - 量子晶核品牌微标
- * 用于应用顶部导航与品牌展示，科技质感聚合节点
+ * 1. TomarkLogoIcon (QuantumLogoIcon) - Tomark「收藏不吃灰」品牌徽标
+ * 融合 T 字母骨架、书签折叠织带与点亮书签的 AI 知识星芒
  */
 export const QuantumLogoIcon: React.FC<TechIconProps> = ({ size = 20, className = '', glow = true, ...props }) => (
   <svg
@@ -17,34 +17,46 @@ export const QuantumLogoIcon: React.FC<TechIconProps> = ({ size = 20, className 
     viewBox="0 0 24 24"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={`shrink-0 ${className} ${glow ? 'filter drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]' : ''}`}
+    className={`shrink-0 ${className} ${glow ? 'filter drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]' : ''}`}
     {...props}
   >
-    <polygon
-      points="12,2 21,7.5 21,16.5 12,22 3,16.5 3,7.5"
-      stroke="url(#quantum-grad)"
-      strokeWidth="1.8"
-      strokeLinejoin="round"
-      fill="#0c1222"
-      fillOpacity="0.8"
-    />
-    <polygon
-      points="12,6 18,9.5 18,14.5 12,18 6,14.5 6,9.5"
-      stroke="#60a5fa"
-      strokeWidth="1.2"
-      strokeDasharray="2 1.5"
-      fill="none"
-    />
-    <circle cx="12" cy="12" r="2.5" fill="#38bdf8" />
     <defs>
-      <linearGradient id="quantum-grad" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#3b82f6" />
-        <stop offset="0.5" stopColor="#8b5cf6" />
-        <stop offset="1" stopColor="#06b6d4" />
+      <linearGradient id="tomark-bar-grad" x1="2" y1="3" x2="20" y2="7" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#38bdf8" />
+        <stop offset="1" stopColor="#818cf8" />
+      </linearGradient>
+      <linearGradient id="tomark-ribbon-grad" x1="9" y1="7" x2="15" y2="21" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#60a5fa" />
+        <stop offset="0.6" stopColor="#3b82f6" />
+        <stop offset="1" stopColor="#6366f1" />
+      </linearGradient>
+      <linearGradient id="tomark-spark-grad" x1="18" y1="1" x2="23" y2="6" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#fef08a" />
+        <stop offset="1" stopColor="#f59e0b" />
       </linearGradient>
     </defs>
+
+    {/* T 书签顶部横梁 */}
+    <rect x="3.5" y="4.5" width="16" height="3.4" rx="1.7" fill="url(#tomark-bar-grad)" />
+
+    {/* T 书签垂挂纵向织带（燕尾凹槽） */}
+    <path
+      d="M9.5 7.9 H14.5 V19.5 L12 17.5 L9.5 19.5 Z"
+      fill="url(#tomark-ribbon-grad)"
+    />
+
+    {/* 织带内立体中脊光痕 */}
+    <line x1="12" y1="8" x2="12" y2="17.2" stroke="#bae6fd" strokeWidth="0.8" strokeOpacity="0.8" strokeDasharray="1.5 1.5" />
+
+    {/* AI 星芒（让知识点亮，不吃灰） */}
+    <path
+      d="M20 1.5 C20 2.8 21 3.8 22.3 3.8 C21 3.8 20 4.8 20 6.1 C20 4.8 19 3.8 17.7 3.8 C19 3.8 20 2.8 20 1.5 Z"
+      fill="url(#tomark-spark-grad)"
+    />
   </svg>
 );
+
+export const TomarkLogoIcon = QuantumLogoIcon;
 
 /**
  * 2. TerminalCodeIcon - 代码与开源平台
