@@ -417,14 +417,14 @@ func (d *DB) GetBookmarks(search, tagName, category, domainFilter string, favori
 		args = append(args, like, like, like, like, like, like)
 	}
 
-	if category != "" && domainFilter == "" {
+	if category != "" {
 		conditions = append(conditions, "b.category = ?")
 		args = append(args, category)
 	}
 
 	if domainFilter != "" {
-		conditions = append(conditions, "b.domain = ?")
-		args = append(args, domainFilter)
+		conditions = append(conditions, "(b.domain = ? OR b.sub_category = ?)")
+		args = append(args, domainFilter, domainFilter)
 	}
 
 	if favoriteOnly {

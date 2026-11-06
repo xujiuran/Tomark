@@ -5,7 +5,8 @@ import {
   CheckCircle, Globe, RefreshCw, X, FolderTree, ChevronDown, ChevronRight,
   Edit3, Check, Loader2, ArrowRight, MoreVertical, LayoutGrid, Palette, Layers,
   FileText, CornerDownRight, FolderPlus, FileUp, Compass, Bookmark as BookmarkIcon,
-  Clock, AlertCircle, CheckSquare, Square, CheckCheck, ListTodo, FolderInput, Tags, GripVertical
+  Clock, AlertCircle, CheckSquare, Square, CheckCheck, ListTodo, FolderInput, Tags, GripVertical,
+  ChevronsUpDown
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
@@ -29,6 +30,7 @@ export default function App() {
   const [tags, setTags] = useState<models.Tag[]>([]);
   const [hierarchies, setHierarchies] = useState<models.CategoryHierarchy[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [isCategoriesCollapsed, setIsCategoriesCollapsed] = useState(false);
   const [isTagsCollapsed, setIsTagsCollapsed] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
   const [stats, setStats] = useState<models.Stats | null>(null);
@@ -83,8 +85,27 @@ export default function App() {
   });
   const isResizingSidebar = useRef(false);
 
-  // Drag and drop bookmarks onto category tree
+  // Resizable right detail panel width
+  const [detailWidth, setDetailWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('linkit_detail_width');
+    return saved ? Math.min(650, Math.max(260, parseInt(saved, 10))) : 380;
+  });
+  const isResizingDetail = useRef(false);
+
+  // Resizable tags section height
+  const [tagsHeight, setTagsHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('linkit_tags_height');
+    return saved ? Math.min(450, Math.max(80, parseInt(saved, 10))) : 160;
+  });
+  const isResizingTags = useRef(false);
+
+  // Drag and drop bookmarks or tree subcategories onto category tree
   const [draggingBookmarkIds, setDraggingBookmarkIds] = useState<string[]>([]);
+  const [draggingSubCat, setDraggingSubCat] = useState<{
+    sourceCat: string;
+    domain: string;
+    name: string;
+  } | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
 
   // Navigation & filters
@@ -557,6 +578,84 @@ export default function App() {
     window.addEventListener('mouseup', onMouseUp);
   };
 
+  // Right detail panel drag-to-resize handler
+  const startResizingDetail = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingDetail.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingDetail.current) return;
+      const newWidth = Math.min(650, Math.max(260, window.innerWidth - moveEvent.clientX));
+      setDetailWidth(newWidth);
+      localStorage.setItem('linkit_detail_width', String(newWidth));
+    };
+
+    const onMouseUp = () => {
+      isResizingDetail.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Tags section vertical height drag-to-resize handler
+  const startResizingTags = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingTags.current = true;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const startY = e.clientY;
+    const startHeight = tagsHeight;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingTags.current) return;
+      const delta = startY - moveEvent.clientY;
+      const newHeight = Math.min(450, Math.max(80, startHeight + delta));
+      setTagsHeight(newHeight);
+      localStorage.setItem('linkit_tags_height', String(newHeight));
+    };
+
+    const onMouseUp = () => {
+      isResizingTags.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Toggle expand / collapse all categories in tree
+  const handleToggleAllCategories = () => {
+    const hasAnyExpanded = hierarchies.some(h => (expandedCategories[h.name] ?? true));
+    const next: Record<string, boolean> = {};
+    for (const h of hierarchies) {
+      next[h.name] = !hasAnyExpanded;
+    }
+    setExpandedCategories(next);
+  };
+
+  // Move a subcategory (domain) to another major category via drag and drop
+  const handleDropSubCategoryOnCategory = async (domain: string, targetCategory: string) => {
+    if (!domain || !targetCategory) return;
+    try {
+      await MoveSubCategory(domain, targetCategory);
+      setDraggingSubCat(null);
+      await loadData();
+    } catch (err: any) {
+      alert("移动站点失败: " + err);
+    }
+  };
+
   // Drag and drop bookmarks onto category / subcategory
   const handleDropOnCategory = async (bookmarkIds: string[], targetCategory: string) => {
     if (!targetCategory || bookmarkIds.length === 0) return;
@@ -807,15 +906,40 @@ export default function App() {
 
           {/* 分类目录树：一级大类 -> 二级站点(主域名) */}
           <div className="px-3 py-2 border-t border-slate-800/60 flex-1 overflow-y-auto">
-            <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
+            {/* 表头：分类与站点，支持折叠全部、新建大类 */}
+            <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between select-none">
+              <div 
+                className="flex items-center gap-1.5 cursor-pointer hover:text-slate-200 transition"
+                onClick={() => setIsCategoriesCollapsed(!isCategoriesCollapsed)}
+                title="折叠/展开分类树"
+              >
                 <FolderTree className="w-3.5 h-3.5 text-blue-400" />
                 <span>分类与站点</span>
+                <span className="text-slate-500 hover:text-slate-300 ml-0.5">
+                  {isCategoriesCollapsed ? (
+                    <ChevronRight className="w-3 h-3" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3" />
+                  )}
+                </span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <span className="text-[10px] text-slate-500 font-mono">
                   {hierarchies.length} 大类
                 </span>
+                {!isCategoriesCollapsed && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleAllCategories();
+                    }}
+                    className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition"
+                    title={hierarchies.some(h => (expandedCategories[h.name] ?? true)) ? "一键全部收起" : "一键全部展开"}
+                  >
+                    <ChevronsUpDown className="w-3 h-3" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={(e) => {
@@ -830,7 +954,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-1 space-y-1 select-none pr-0.5">
+            {!isCategoriesCollapsed && (
+              <div className="mt-1 space-y-1 select-none pr-0.5">
               {hierarchies.map((cat) => {
                 const isCatActive = selectedCategory === cat.name && !selectedDomain;
                 const isExpanded = expandedCategories[cat.name] ?? true;
@@ -858,7 +983,11 @@ export default function App() {
                           const dataStr = e.dataTransfer.getData('application/json');
                           if (dataStr) {
                             const data = JSON.parse(dataStr);
-                            if (data?.bookmarkIds?.length > 0) {
+                            if (data?.type === 'tree-subcategory') {
+                              if (data.sourceCategory !== cat.name) {
+                                await handleDropSubCategoryOnCategory(data.domain, cat.name);
+                              }
+                            } else if (data?.bookmarkIds?.length > 0) {
                               await handleDropOnCategory(data.bookmarkIds, cat.name);
                             }
                           }
@@ -953,9 +1082,30 @@ export default function App() {
                       <div className="pl-4 space-y-0.5 border-l border-slate-800/80 ml-3">
                         {cat.sub_categories.map((sub) => {
                           const isSubSelected = selectedDomain === sub.domain;
+                          const isBeingDragged = draggingSubCat?.domain === sub.domain && draggingSubCat?.sourceCat === cat.name;
                           return (
                             <div
                               key={`${cat.name}-${sub.domain}`}
+                              draggable={true}
+                              onDragStart={(e) => {
+                                e.stopPropagation();
+                                e.dataTransfer.setData('application/json', JSON.stringify({
+                                  type: 'tree-subcategory',
+                                  sourceCategory: cat.name,
+                                  domain: sub.domain,
+                                  subName: sub.name,
+                                }));
+                                e.dataTransfer.effectAllowed = 'move';
+                                setDraggingSubCat({
+                                  sourceCat: cat.name,
+                                  domain: sub.domain,
+                                  name: sub.name,
+                                });
+                              }}
+                              onDragEnd={() => {
+                                setDraggingSubCat(null);
+                                setDragOverTarget(null);
+                              }}
                               onDragOver={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -999,14 +1149,18 @@ export default function App() {
                                 }
                               }}
                               className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-[11px] transition cursor-pointer group/sub ${
-                                dragOverTarget === `sub:${cat.name}:${sub.domain}`
-                                  ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200 ring-2 ring-cyan-500/50 font-medium scale-[1.02]'
-                                  : isSubSelected
-                                    ? 'bg-blue-600/40 text-blue-300 border border-blue-500/50 font-medium'
-                                    : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                                isBeingDragged
+                                  ? 'opacity-40 border border-dashed border-cyan-400 bg-cyan-950/40 scale-[0.98]'
+                                  : dragOverTarget === `sub:${cat.name}:${sub.domain}`
+                                    ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200 ring-2 ring-cyan-500/50 font-medium scale-[1.02]'
+                                    : isSubSelected
+                                      ? 'bg-blue-600/40 text-blue-300 border border-blue-500/50 font-medium'
+                                      : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
                               }`}
+                              title="点击筛选站点；支持按住拖拽至其他「一级大类」进行转移"
                             >
                               <div className="flex items-center gap-1.5 truncate">
+                                <GripVertical className="w-2.5 h-2.5 text-slate-500 opacity-0 group-hover/sub:opacity-80 cursor-grab shrink-0 transition -mr-0.5" />
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSubSelected ? 'bg-blue-400' : 'bg-slate-600'}`}></span>
                                 <span className="truncate">{sub.name}</span>
                               </div>
@@ -1065,13 +1219,31 @@ export default function App() {
                 <p className="text-[11px] text-slate-500 px-2 py-2 italic">暂无分类，AI 分析后自动构建二级站点体系</p>
               )}
             </div>
+            )}
           </div>
 
-          {/* 精简标签区 (折叠式展示，杜绝无意义刷屏) */}
-          <div className="px-3 py-2 border-t border-slate-800/60 shrink-0">
+          {/* 拖拽调整核心标签与分类树垂直高度分配的分割把手 */}
+          <div
+            onMouseDown={startResizingTags}
+            className="h-1.5 -my-0.5 cursor-row-resize z-20 bg-transparent hover:bg-cyan-500/60 active:bg-cyan-500 transition-colors group relative flex items-center justify-center shrink-0 select-none border-t border-slate-800/80"
+            title="按住鼠标拖拽调整标签区与分类树的垂直高度比例（双击复位默认 160px）"
+            onDoubleClick={() => {
+              setTagsHeight(160);
+              localStorage.setItem('linkit_tags_height', '160');
+            }}
+          >
+            <div className="h-0.5 w-8 bg-slate-700/60 group-hover:bg-cyan-400 group-active:bg-cyan-400 rounded-full transition" />
+          </div>
+
+          {/* 精简标签区 (高度可拖拽调整，折叠式展示) */}
+          <div 
+            style={isTagsCollapsed ? undefined : { height: `${tagsHeight}px` }}
+            className="px-3 py-2 shrink-0 flex flex-col overflow-hidden"
+          >
             <div 
-              className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between cursor-pointer hover:text-slate-300 select-none"
+              className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between cursor-pointer hover:text-slate-300 select-none shrink-0"
               onClick={() => setIsTagsCollapsed(!isTagsCollapsed)}
+              title="折叠/展开标签区"
             >
               <div className="flex items-center gap-1.5">
                 <TagIcon className="w-3.5 h-3.5 text-blue-400" />
@@ -1084,14 +1256,14 @@ export default function App() {
             </div>
 
             {!isTagsCollapsed && (
-              <div className="mt-1 flex flex-wrap gap-1 px-1 max-h-36 overflow-y-auto">
-                {tags.slice(0, showAllTags ? tags.length : 12).map((t) => (
+              <div className="mt-1 flex-1 flex flex-wrap content-start gap-1 px-1 overflow-y-auto">
+                {tags.slice(0, showAllTags ? tags.length : 25).map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
-                    className={`px-2 py-0.5 rounded text-[10px] transition flex items-center gap-1 ${
+                    className={`px-2 py-0.5 rounded text-[10px] transition flex items-center gap-1 shrink-0 ${
                       selectedTag === t.name
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/50'
                         : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60'
                     }`}
                   >
@@ -1100,11 +1272,11 @@ export default function App() {
                   </button>
                 ))}
 
-                {tags.length > 12 && (
+                {tags.length > 25 && (
                   <button
                     type="button"
                     onClick={() => setShowAllTags(!showAllTags)}
-                    className="text-[10px] text-blue-400 hover:underline px-1 py-0.5"
+                    className="text-[10px] text-cyan-400 hover:underline px-1 py-0.5 shrink-0"
                   >
                     {showAllTags ? '收起' : `+ 展开全部 (${tags.length})`}
                   </button>
@@ -1262,7 +1434,14 @@ export default function App() {
           )}
 
           {/* 拖拽中的全局指引横幅 */}
-          {draggingBookmarkIds.length > 0 && (
+          {draggingSubCat && (
+            <div className="px-4 py-2 bg-gradient-to-r from-blue-950/90 via-cyan-950/90 to-blue-950/90 border-b border-cyan-500/50 flex items-center justify-center gap-2 text-xs text-cyan-300 font-medium animate-pulse shrink-0">
+              <FolderInput className="w-4 h-4 text-cyan-400" />
+              <span>正在拖拽转移站点「{draggingSubCat.name}」：拖拽到任意「一级大类」上松开即可转移分类</span>
+            </div>
+          )}
+
+          {draggingBookmarkIds.length > 0 && !draggingSubCat && (
             <div className="px-4 py-2 bg-gradient-to-r from-blue-950/90 via-cyan-950/90 to-blue-950/90 border-b border-cyan-500/50 flex items-center justify-center gap-2 text-xs text-cyan-300 font-medium animate-pulse shrink-0">
               <FolderInput className="w-4 h-4 text-cyan-400" />
               <span>拖拽到左侧任意「大类」或「二级站点」即可快速归类 ({draggingBookmarkIds.length} 项)</span>
@@ -1506,8 +1685,24 @@ export default function App() {
           )}
         </main>
 
-        {/* 3. 右侧详情、阅读器与私人笔记面板 (Detail, Reader & Notes Panel) */}
-        <aside className="w-96 xl:w-[420px] flex flex-col border-l border-slate-800/80 bg-[#0f1420]/50 backdrop-blur-xl shrink-0">
+        {/* 拖拽调整右侧面板宽度的分割把手 */}
+        <div
+          onMouseDown={startResizingDetail}
+          className="w-1.5 -ml-1 cursor-col-resize z-30 bg-transparent hover:bg-blue-500/60 active:bg-blue-500 transition-colors group relative flex items-center justify-center shrink-0 select-none"
+          title="按住鼠标拖拽调整右侧栏宽度（双击复位默认 380px）"
+          onDoubleClick={() => {
+            setDetailWidth(380);
+            localStorage.setItem('linkit_detail_width', '380');
+          }}
+        >
+          <div className="w-0.5 h-8 bg-slate-700/60 group-hover:bg-blue-400 group-active:bg-blue-400 rounded-full transition" />
+        </div>
+
+        {/* 3. 右侧详情与分类管理面板 */}
+        <aside 
+          style={{ width: `${detailWidth}px` }}
+          className="flex flex-col border-l border-slate-800/80 bg-[#0f1420]/50 backdrop-blur-xl shrink-0 relative"
+        >
           {selectedBookmark ? (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               {/* 顶栏操作区 */}
