@@ -26,12 +26,16 @@ export function GetBookmark(arg1) {
   return window['go']['main']['App']['GetBookmark'](arg1);
 }
 
-export function GetBookmarks(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['GetBookmarks'](arg1, arg2, arg3, arg4, arg5);
+export function GetBookmarks(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['GetBookmarks'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function GetCategories() {
   return window['go']['main']['App']['GetCategories']();
+}
+
+export function GetCategoryHierarchy() {
+  return window['go']['main']['App']['GetCategoryHierarchy']();
 }
 
 export function GetStats() {

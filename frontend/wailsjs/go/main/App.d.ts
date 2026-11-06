@@ -14,9 +14,11 @@ export function GetAnalysisProgress():Promise<models.AnalysisProgress>;
 
 export function GetBookmark(arg1:string):Promise<models.Bookmark>;
 
-export function GetBookmarks(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:boolean):Promise<Array<models.Bookmark>>;
+export function GetBookmarks(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean):Promise<Array<models.Bookmark>>;
 
 export function GetCategories():Promise<Array<models.CategoryCount>>;
+
+export function GetCategoryHierarchy():Promise<Array<models.CategoryHierarchy>>;
 
 export function GetStats():Promise<models.Stats>;
 

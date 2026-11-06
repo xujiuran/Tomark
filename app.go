@@ -97,11 +97,11 @@ func (a *App) AddBookmark(targetURL string) (*models.Bookmark, error) {
 }
 
 // GetBookmarks returns bookmarks matching search and filter parameters.
-func (a *App) GetBookmarks(search, tagName, category string, favoriteOnly, archivedOnly bool) ([]*models.Bookmark, error) {
+func (a *App) GetBookmarks(search, tagName, category, domainFilter string, favoriteOnly, archivedOnly bool) ([]*models.Bookmark, error) {
 	if a.db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	return a.db.GetBookmarks(search, tagName, category, favoriteOnly, archivedOnly)
+	return a.db.GetBookmarks(search, tagName, category, domainFilter, favoriteOnly, archivedOnly)
 }
 
 // GetBookmark retrieves a single bookmark by ID.
@@ -174,6 +174,14 @@ func (a *App) AnalyzeBookmark(id string) (*models.AISummaryResult, error) {
 	}
 
 	return res, nil
+}
+
+// GetCategoryHierarchy returns the two-level category tree (一级分类 -> 二级站点/主域名).
+func (a *App) GetCategoryHierarchy() ([]*models.CategoryHierarchy, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	return a.db.GetCategoryHierarchy()
 }
 
 // GetCategories returns category counts from the database.

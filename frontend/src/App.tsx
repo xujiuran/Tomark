@@ -3,11 +3,11 @@ import {
   Bookmark as BookmarkIcon, Star, Archive, Trash2, ExternalLink, 
   Sparkles, Search, Plus, Settings, Tag as TagIcon, BarChart2, 
   CheckCircle, Globe, RefreshCw, X, BookOpen, Layers, FileUp,
-  Clock, AlertCircle, FolderTree, Code2
+  Clock, AlertCircle, FolderTree, Code2, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { 
   GetBookmarks, AddBookmark, DeleteBookmark, ToggleFavorite, 
-  ToggleArchive, AnalyzeBookmark, GetTags, GetCategories, GetStats, 
+  ToggleArchive, AnalyzeBookmark, GetTags, GetCategoryHierarchy, GetStats, 
   SaveAIConfig, GetAIConfig, SelectAndImportBookmarks, 
   StartBatchAIAnalysis, GetAnalysisProgress, ResetAndReanalyzeAll
 } from '../wailsjs/go/main/App';
@@ -29,13 +29,18 @@ const CATEGORY_ICONS: Record<string, string> = {
 export default function App() {
   const [bookmarks, setBookmarks] = useState<models.Bookmark[]>([]);
   const [tags, setTags] = useState<models.Tag[]>([]);
-  const [categories, setCategories] = useState<models.CategoryCount[]>([]);
+  const [hierarchies, setHierarchies] = useState<models.CategoryHierarchy[]>([]);
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [isTagsCollapsed, setIsTagsCollapsed] = useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
   const [stats, setStats] = useState<models.Stats | null>(null);
   const [selectedBookmark, setSelectedBookmark] = useState<models.Bookmark | null>(null);
   
   // Navigation & filters
   const [currentTab, setCurrentTab] = useState<'all' | 'favorites' | 'archived'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedDomain, setSelectedDomain] = useState<string>('');
+  const [selectedSubName, setSelectedSubName] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -99,11 +104,11 @@ export default function App() {
     try {
       const fav = currentTab === 'favorites';
       const arch = currentTab === 'archived';
-      const list = await GetBookmarks(searchQuery, selectedTag, selectedCategory, fav, arch);
+      const list = await GetBookmarks(searchQuery, selectedTag, selectedCategory, selectedDomain, fav, arch);
       setBookmarks(list || []);
       
-      const cats = await GetCategories();
-      setCategories(cats || []);
+      const hiers = await GetCategoryHierarchy();
+      setHierarchies(hiers || []);
 
       const t = await GetTags();
       setTags(t || []);
@@ -122,7 +127,7 @@ export default function App() {
 
   useEffect(() => {
     loadData();
-  }, [currentTab, selectedCategory, selectedTag, searchQuery]);
+  }, [currentTab, selectedCategory, selectedDomain, selectedTag, searchQuery]);
 
   // Load AI configuration on mount
   useEffect(() => {
@@ -301,9 +306,9 @@ export default function App() {
           {/* 导航菜单 */}
           <div className="p-3 space-y-1">
             <button
-              onClick={() => { setCurrentTab('all'); setSelectedCategory(''); setSelectedTag(''); }}
+              onClick={() => { setCurrentTab('all'); setSelectedCategory(''); setSelectedDomain(''); setSelectedSubName(''); setSelectedTag(''); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                currentTab === 'all' && !selectedCategory && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+                currentTab === 'all' && !selectedCategory && !selectedDomain && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -314,9 +319,9 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { setCurrentTab('favorites'); setSelectedCategory(''); setSelectedTag(''); }}
+              onClick={() => { setCurrentTab('favorites'); setSelectedCategory(''); setSelectedDomain(''); setSelectedSubName(''); setSelectedTag(''); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                currentTab === 'favorites' && !selectedCategory && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+                currentTab === 'favorites' && !selectedCategory && !selectedDomain && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -327,9 +332,9 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { setCurrentTab('archived'); setSelectedCategory(''); setSelectedTag(''); }}
+              onClick={() => { setCurrentTab('archived'); setSelectedCategory(''); setSelectedDomain(''); setSelectedSubName(''); setSelectedTag(''); }}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                currentTab === 'archived' && !selectedCategory && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+                currentTab === 'archived' && !selectedCategory && !selectedDomain && !selectedTag ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -340,71 +345,165 @@ export default function App() {
             </button>
           </div>
 
-          {/* 核心分类体系 (10 大标准分类) */}
-          <div className="px-3 py-2 border-t border-slate-800/60">
+          {/* 分类目录树：一级大类 -> 二级站点(主域名) */}
+          <div className="px-3 py-2 border-t border-slate-800/60 flex-1 overflow-y-auto">
             <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <FolderTree className="w-3.5 h-3.5 text-blue-400" />
-                <span>分类目录</span>
+                <span>分类与站点</span>
               </div>
               <span className="text-[10px] text-slate-500 font-mono">
-                {categories.length}
+                {hierarchies.length} 大类
               </span>
             </div>
-            <div className="mt-1 space-y-0.5 max-h-52 overflow-y-auto pr-0.5">
-              {categories.map((c) => (
-                <button
-                  key={c.name}
-                  onClick={() => setSelectedCategory(selectedCategory === c.name ? '' : c.name)}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition ${
-                    selectedCategory === c.name 
-                      ? 'bg-blue-600/30 text-blue-400 border border-blue-500/40 font-medium' 
-                      : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="text-xs shrink-0">{CATEGORY_ICONS[c.name] || '📁'}</span>
-                    <span className="truncate">{c.name}</span>
+
+            <div className="mt-1 space-y-1 select-none pr-0.5">
+              {hierarchies.map((cat) => {
+                const isCatActive = selectedCategory === cat.name && !selectedDomain;
+                const isExpanded = expandedCategories[cat.name] ?? true;
+
+                return (
+                  <div key={cat.name} className="space-y-0.5">
+                    {/* 一级大类行 */}
+                    <div
+                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition cursor-pointer group ${
+                        isCatActive
+                          ? 'bg-blue-600/30 text-blue-400 border border-blue-500/40 font-semibold'
+                          : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
+                      }`}
+                      onClick={() => {
+                        if (isCatActive) {
+                          setSelectedCategory('');
+                          setSelectedDomain('');
+                          setSelectedSubName('');
+                        } else {
+                          setSelectedCategory(cat.name);
+                          setSelectedDomain('');
+                          setSelectedSubName('');
+                          setSelectedTag('');
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedCategories(prev => ({ ...prev, [cat.name]: !isExpanded }));
+                          }}
+                          className="p-0.5 rounded hover:bg-slate-700/60 text-slate-500 hover:text-slate-300 transition"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-3 h-3" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3" />
+                          )}
+                        </button>
+                        <span className="text-xs shrink-0">{CATEGORY_ICONS[cat.name] || '📁'}</span>
+                        <span className="truncate">{cat.name}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono bg-slate-800/80 px-1.5 py-0.5 rounded-full">{cat.count}</span>
+                    </div>
+
+                    {/* 二级站点/主域名行 (仅在展开且有二级分类时显示) */}
+                    {isExpanded && cat.sub_categories && cat.sub_categories.length > 0 && (
+                      <div className="pl-4 space-y-0.5 border-l border-slate-800/80 ml-3">
+                        {cat.sub_categories.map((sub) => {
+                          const isSubSelected = selectedCategory === cat.name && selectedDomain === sub.domain;
+                          return (
+                            <button
+                              key={sub.domain}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isSubSelected) {
+                                  setSelectedDomain('');
+                                  setSelectedSubName('');
+                                } else {
+                                  setSelectedCategory(cat.name);
+                                  setSelectedDomain(sub.domain);
+                                  setSelectedSubName(sub.name);
+                                  setSelectedTag('');
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-[11px] transition ${
+                                isSubSelected
+                                  ? 'bg-blue-600/40 text-blue-300 border border-blue-500/50 font-medium'
+                                  : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
+                                <span className="truncate">{sub.name}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-mono">{sub.count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono">{c.count}</span>
-                </button>
-              ))}
-              {categories.length === 0 && (
-                <p className="text-[11px] text-slate-500 px-2 py-2 italic">暂无分类，AI 深度分析后自动归入标准分类</p>
+                );
+              })}
+
+              {hierarchies.length === 0 && (
+                <p className="text-[11px] text-slate-500 px-2 py-2 italic">暂无分类，AI 分析后自动构建二级站点体系</p>
               )}
             </div>
           </div>
 
-          {/* 标签列表 */}
-          <div className="flex-1 overflow-y-auto px-3 py-2">
-            <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between">
-              <span>智能标签</span>
-              <span className="text-[10px] text-slate-500">{tags.length}</span>
+          {/* 精简标签区 (折叠式展示，杜绝无意义刷屏) */}
+          <div className="px-3 py-2 border-t border-slate-800/60 shrink-0">
+            <div 
+              className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider flex items-center justify-between cursor-pointer hover:text-slate-300 select-none"
+              onClick={() => setIsTagsCollapsed(!isTagsCollapsed)}
+            >
+              <div className="flex items-center gap-1.5">
+                <TagIcon className="w-3.5 h-3.5 text-blue-400" />
+                <span>核心标签</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-500 font-mono">{tags.length}</span>
+                {isTagsCollapsed ? <ChevronRight className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />}
+              </div>
             </div>
-            <div className="mt-1 space-y-0.5">
-              {tags.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition ${
-                    selectedTag === t.name ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <TagIcon className="w-3 h-3 text-blue-400 shrink-0" />
-                    <span className="truncate">#{t.name}</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-mono">{t.count}</span>
-                </button>
-              ))}
-              {tags.length === 0 && (
-                <p className="text-[11px] text-slate-500 px-2 py-3 italic">暂无标签，添加书签后由 AI 自动生成</p>
-              )}
-            </div>
+
+            {!isTagsCollapsed && (
+              <div className="mt-1 flex flex-wrap gap-1 px-1 max-h-36 overflow-y-auto">
+                {tags.slice(0, showAllTags ? tags.length : 12).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
+                    className={`px-2 py-0.5 rounded text-[10px] transition flex items-center gap-1 ${
+                      selectedTag === t.name
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60'
+                    }`}
+                  >
+                    <span>#{t.name}</span>
+                    <span className="text-[9px] opacity-75 font-mono">({t.count})</span>
+                  </button>
+                ))}
+
+                {tags.length > 12 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllTags(!showAllTags)}
+                    className="text-[10px] text-blue-400 hover:underline px-1 py-0.5"
+                  >
+                    {showAllTags ? '收起' : `+ 展开全部 (${tags.length})`}
+                  </button>
+                )}
+
+                {tags.length === 0 && (
+                  <p className="text-[11px] text-slate-500 py-1 italic">暂无内容标签</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 状态统计卡片 */}
-          <div className="p-3 border-t border-slate-800/60 text-xs">
+          <div className="p-3 border-t border-slate-800/60 text-xs shrink-0">
             <div className="p-2.5 rounded-lg bg-slate-800/40 border border-slate-800 flex items-center justify-between">
               <span className="text-[11px] text-slate-400">本地存储 (SQLite)</span>
               <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
@@ -417,23 +516,59 @@ export default function App() {
 
         {/* 2. 中间书签列表流 (Bookmark List) */}
         <main className="flex-1 flex flex-col min-w-0 border-r border-slate-800/80 bg-[#0d121c]/40">
-          {/* 次级筛选栏与状态栏 */}
+          {/* 次级筛选栏与面包屑路径 */}
           <div className="h-9 border-b border-slate-800/60 px-4 flex items-center justify-between text-xs bg-[#0d121c]/40 shrink-0">
-            <div className="flex items-center gap-2 text-slate-400 font-medium">
-              <span>
+            <div className="flex items-center gap-1.5 text-slate-400 font-medium truncate">
+              <button
+                onClick={() => { setSelectedCategory(''); setSelectedDomain(''); setSelectedSubName(''); setSelectedTag(''); }}
+                className="hover:text-blue-400 transition"
+              >
                 {currentTab === 'all' && '全部书签'}
                 {currentTab === 'favorites' && '星标收藏'}
                 {currentTab === 'archived' && '归档箱'}
-              </span>
+              </button>
+
               {selectedCategory && (
-                <span className="flex items-center gap-1 text-indigo-400 font-medium bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-800/40">
-                  <span>{CATEGORY_ICONS[selectedCategory] || '📁'}</span>
-                  <span>{selectedCategory}</span>
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-600">/</span>
+                  <button
+                    onClick={() => { setSelectedDomain(''); setSelectedSubName(''); }}
+                    className={`px-1.5 py-0.5 rounded transition ${!selectedDomain ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-blue-300'}`}
+                  >
+                    {CATEGORY_ICONS[selectedCategory] || '📁'} {selectedCategory}
+                  </button>
+                </div>
               )}
-              {selectedTag && <span className="text-blue-400 font-mono">#{selectedTag}</span>}
-              <span className="text-slate-600 font-mono">({bookmarks.length})</span>
+
+              {selectedDomain && (
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-600">/</span>
+                  <span className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/50 text-blue-300 font-semibold flex items-center gap-1">
+                    <Globe className="w-3 h-3 text-blue-400" />
+                    <span>{selectedSubName || selectedDomain} (子页面)</span>
+                  </span>
+                </div>
+              )}
+
+              {selectedTag && (
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-600">/</span>
+                  <span className="text-blue-400 font-mono">#{selectedTag}</span>
+                </div>
+              )}
+
+              <span className="text-slate-600 font-mono ml-1">({bookmarks.length})</span>
             </div>
+
+            {(selectedCategory || selectedDomain || selectedTag) && (
+              <button
+                onClick={() => { setSelectedCategory(''); setSelectedDomain(''); setSelectedSubName(''); setSelectedTag(''); }}
+                className="text-[11px] text-slate-500 hover:text-slate-300 flex items-center gap-1 shrink-0"
+              >
+                <X className="w-3 h-3" />
+                <span>重置筛选</span>
+              </button>
+            )}
           </div>
 
           {/* 书签流 */}
@@ -519,6 +654,7 @@ export default function App() {
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50 flex items-center gap-1">
                           <span>{CATEGORY_ICONS[bm.category] || '📁'}</span>
                           <span>{bm.category}</span>
+                          {bm.sub_category && <span className="opacity-80">· {bm.sub_category}</span>}
                         </span>
                       )}
                       {bm.tags && bm.tags.map((t, idx) => (
@@ -585,6 +721,12 @@ export default function App() {
                         <span>{CATEGORY_ICONS[selectedBookmark.category] || '📁'}</span>
                         <span>{selectedBookmark.category}</span>
                       </span>
+                      {selectedBookmark.sub_category && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-medium inline-flex items-center gap-1">
+                          <Globe className="w-3 h-3 text-blue-400" />
+                          <span>{selectedBookmark.sub_category}</span>
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

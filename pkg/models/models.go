@@ -9,6 +9,8 @@ type Bookmark struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Category    string    `json:"category"`
+	SubCategory string    `json:"sub_category"`
+	Domain      string    `json:"domain"`
 	FaviconURL  string    `json:"favicon_url"`
 	CoverImage  string    `json:"cover_image"`
 	ContentRaw  string    `json:"content_raw"`
@@ -26,6 +28,20 @@ type Bookmark struct {
 type CategoryCount struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+}
+
+// SubCategoryCount represents a site/domain grouping under a primary category.
+type SubCategoryCount struct {
+	Name   string `json:"name"`
+	Domain string `json:"domain"`
+	Count  int    `json:"count"`
+}
+
+// CategoryHierarchy represents an 一级大类 and its 二级分类 (sites/domains).
+type CategoryHierarchy struct {
+	Name          string              `json:"name"`
+	Count         int                 `json:"count"`
+	SubCategories []*SubCategoryCount `json:"sub_categories"`
 }
 
 // Tag represents a category label.
