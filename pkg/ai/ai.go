@@ -47,7 +47,7 @@ func AnalyzeContent(title, targetURL, content, apiKey, baseURL, model string) (*
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	if model == "" {
-		model = "cpa/deepseek-v4.1-flash-1017"
+		model = "auto/deepseek-v4.1-flash"
 	}
 
 	isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
@@ -121,6 +121,14 @@ func AnalyzeContent(title, targetURL, content, apiKey, baseURL, model string) (*
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	// Smart fallback for local Magpie proxy: if specific model is not found, auto-fallback to auto/deepseek-v4.1-flash
+	if isLocal && resp.StatusCode != http.StatusOK && model != "auto/deepseek-v4.1-flash" {
+		bodyStr := string(respBody)
+		if strings.Contains(bodyStr, "model_not_found") || strings.Contains(bodyStr, "unknown provider") || strings.Contains(bodyStr, "permission_error") {
+			return AnalyzeContent(title, targetURL, content, apiKey, baseURL, "auto/deepseek-v4.1-flash")
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {

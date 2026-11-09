@@ -132,7 +132,7 @@ export default function App() {
 
   // Settings form
   const [aiBaseURL, setAiBaseURL] = useState('http://127.0.0.1:3425/v1');
-  const [aiModel, setAiModel] = useState('cpa/deepseek-v4.1-flash-1017');
+  const [aiModel, setAiModel] = useState('auto/deepseek-v4.1-flash');
   const [aiApiKey, setAiApiKey] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -253,7 +253,7 @@ export default function App() {
     GetAIConfig().then(cfg => {
       if (cfg) {
         setAiBaseURL(cfg.base_url || 'http://127.0.0.1:3425/v1');
-        setAiModel(cfg.model || 'cpa/deepseek-v4.1-flash-1017');
+        setAiModel(cfg.model || 'auto/deepseek-v4.1-flash');
         if (cfg.api_key) setAiApiKey(cfg.api_key);
       }
     }).catch(console.error);
@@ -2671,7 +2671,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setAiBaseURL('http://127.0.0.1:3425/v1');
-                    setAiModel('cpa/deepseek-v4.1-flash-1017');
+                    setAiModel('auto/deepseek-v4.1-flash');
                     setAiApiKey('');
                   }}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition ${
@@ -2679,6 +2679,7 @@ export default function App() {
                       ? 'bg-blue-600/30 text-blue-400 border-blue-500/50 shadow-sm'
                       : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-700/60'
                   }`}
+                  title="使用本地 Magpie 代理服务 (默认 auto 路由组)"
                 >
                   ⚡ Magpie (本地 3425)
                 </button>
@@ -2747,11 +2748,35 @@ export default function App() {
                 <label className="block text-slate-300 mb-1">模型名称 (Model)</label>
                 <input
                   type="text"
-                  placeholder="deepseek-chat 或 gpt-4o-mini"
+                  placeholder="deepseek-chat 或 auto/deepseek-v4.1-flash"
                   value={aiModel}
                   onChange={(e) => setAiModel(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white"
                 />
+                {aiBaseURL.includes('3425') && (
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-500">Magpie 可选模型:</span>
+                    {[
+                      { id: 'auto/deepseek-v4.1-flash', label: 'auto (推荐)' },
+                      { id: 'cpa/deepseek-v4.1-flash', label: 'cpa' },
+                      { id: 'workbuddy/deepseek-v4.1-flash', label: 'workbuddy' },
+                      { id: 'cpa/deepseek-v4.1-flash-1017', label: 'cpa-1017' },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setAiModel(m.id)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] transition font-mono ${
+                          aiModel === m.id
+                            ? 'bg-blue-600/40 text-blue-300 border border-blue-500/60 font-semibold shadow-sm'
+                            : 'bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/60'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

@@ -82,7 +82,7 @@ func (a *App) AddBookmark(targetURL string) (*models.Bookmark, error) {
 	// Try auto AI analysis in the background
 	go func(bmID, title, targetURL, content string) {
 		baseURL := a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1")
-		model := a.db.GetSetting("ai_model", "cpa/deepseek-v4.1-flash-1017")
+		model := a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash")
 		apiKey, _ := keychain.GetAPIKey()
 		isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
 		if isLocal && apiKey == "" {
@@ -196,7 +196,7 @@ func (a *App) AnalyzeBookmark(id string) (*models.AISummaryResult, error) {
 	}
 
 	baseURL := a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1")
-	model := a.db.GetSetting("ai_model", "cpa/deepseek-v4.1-flash-1017")
+	model := a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash")
 
 	apiKey, _ := keychain.GetAPIKey()
 	isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
@@ -288,7 +288,7 @@ func (a *App) GetAIConfig() (*models.AIConfig, error) {
 	}
 	return &models.AIConfig{
 		BaseURL: a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1"),
-		Model:   a.db.GetSetting("ai_model", "cpa/deepseek-v4.1-flash-1017"),
+		Model:   a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash"),
 		APIKey:  hasKey,
 	}, nil
 }
@@ -413,7 +413,7 @@ func (a *App) runBatchAnalysisOnBookmarks(targets []*models.Bookmark) (*models.A
 	a.analysisMu.Unlock()
 
 	baseURL := a.db.GetSetting("ai_base_url", "http://127.0.0.1:3425/v1")
-	model := a.db.GetSetting("ai_model", "cpa/deepseek-v4.1-flash-1017")
+	model := a.db.GetSetting("ai_model", "auto/deepseek-v4.1-flash")
 	apiKey, _ := keychain.GetAPIKey()
 	isLocal := strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost")
 	if isLocal && apiKey == "" {
