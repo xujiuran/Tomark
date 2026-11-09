@@ -19,6 +19,14 @@ func SaveAPIKey(key string) error {
 // GetAPIKey retrieves the AI API key from the OS Keychain / Credential Manager.
 func GetAPIKey() (string, error) {
 	val, err := keyring.Get(ServiceName, "ai_api_key")
+	if err == nil && val != "" {
+		return val, nil
+	}
+	// Fallback to legacy ServiceName "LinkitAI"
+	if legacyVal, legacyErr := keyring.Get("LinkitAI", "ai_api_key"); legacyErr == nil && legacyVal != "" {
+		_ = SaveAPIKey(legacyVal)
+		return legacyVal, nil
+	}
 	if err != nil {
 		if errors.Is(err, keyring.ErrNotFound) {
 			return "", nil

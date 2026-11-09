@@ -116,6 +116,7 @@ export default function App() {
   const [selectedSubName, setSelectedSubName] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Modals & loading states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -256,6 +257,21 @@ export default function App() {
         if (cfg.api_key) setAiApiKey(cfg.api_key);
       }
     }).catch(console.error);
+  }, []);
+
+  // Global shortcut: Cmd+K (Mac) / Ctrl+K (Win) to focus search bar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Category management handlers
@@ -799,6 +815,7 @@ export default function App() {
           <div className="relative w-56 md:w-64">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="搜索书签或语义探索 (Cmd+K)"
               value={searchQuery}

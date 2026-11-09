@@ -40,6 +40,16 @@ func GetInstance() (*DB, error) {
 	}
 
 	dbPath := filepath.Join(appDir, "library.db")
+
+	// Seamless migration: If ~/.tomark/library.db does not exist, copy from legacy ~/.linkit/library.db
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		oldDBPath := filepath.Join(homeDir, ".linkit", "library.db")
+		if _, oldErr := os.Stat(oldDBPath); oldErr == nil {
+			if oldData, readErr := os.ReadFile(oldDBPath); readErr == nil {
+				_ = os.WriteFile(dbPath, oldData, 0644)
+			}
+		}
+	}
 	conn, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

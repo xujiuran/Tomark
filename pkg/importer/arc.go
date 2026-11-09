@@ -32,13 +32,26 @@ type ArcItem struct {
 	CreatedAt   float64         `json:"createdAt"`
 }
 
-// GetDefaultArcSidebarPath returns the macOS default path for Arc's StorableSidebar.json.
+// GetDefaultArcSidebarPath returns the default path for Arc's StorableSidebar.json (macOS & Windows).
 func GetDefaultArcSidebarPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "Library", "Application Support", "Arc", "StorableSidebar.json")
+	// macOS default path
+	macPath := filepath.Join(home, "Library", "Application Support", "Arc", "StorableSidebar.json")
+	if info, err := os.Stat(macPath); err == nil && !info.IsDir() {
+		return macPath
+	}
+	// Windows default path (Arc for Windows)
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData != "" {
+		matches, _ := filepath.Glob(filepath.Join(localAppData, "Packages", "*TheBrowserCompany.Arc*", "LocalCache", "Local", "Arc", "StorableSidebar.json"))
+		if len(matches) > 0 {
+			return matches[0]
+		}
+	}
+	return macPath
 }
 
 // HasArcBrowser checks whether Arc browser data is present on this Mac.
